@@ -15,6 +15,7 @@
         "arcanedev/log-viewer": "^8.3",
         "barryvdh/laravel-dompdf": "*",
         "consoletvs/charts": "^6.9",
+        "fruitcake/laravel-cors": "^3.0",
         "knox/pesapal": "^2.2",
         "laravel/framework": "8.83.29",
         "laravel/passport": "*",
