@@ -7,17 +7,20 @@ const {
     getProductImageUrl,
 } = require('../utils/helpers');
 
-// Function to format invoice number - just use database value as-is
-function formatInvoiceNumber(invoiceNo, documentType) {
-    if (!invoiceNo) return '-';
+// Function to format invoice number for document header.
+function formatInvoiceNumber(invoiceNo, documentType, quotation = null) {
+    // Single-document billing: receipt number comes from latest payment reference when available.
+    if (documentType === 'billing-receipt' && quotation && quotation.latest_payment_ref_no) {
+        return quotation.latest_payment_ref_no;
+    }
 
-    // Return the invoice number exactly as stored in database
+    if (!invoiceNo) return '-';
     return invoiceNo;
 }
 
 // Function to generate document title section based on document type
 function generateDocumentTitleSection(quotation, documentType) {
-    const formattedInvoiceNo = formatInvoiceNumber(quotation.invoice_no, documentType);
+    const formattedInvoiceNo = formatInvoiceNumber(quotation.invoice_no, documentType, quotation);
 
     // let documentLabel = '';
     // switch (documentType) {
@@ -33,7 +36,6 @@ function generateDocumentTitleSection(quotation, documentType) {
     //     default:
     //         documentLabel = 'เลขที่เอกสาร';
     // }
-    console.log('check type is working');
     let documentLabel = '';
     switch (documentType) {
         case 'tax-invoice':
@@ -115,17 +117,72 @@ function generateHeader(currentPage, totalPages, documentType, version = 'origin
     `;
 }
 
+function getDefaultQuotationNotes() {
+    return [
+        'รับประกันซ่อมฟรี 1 ปี (ไม่รวมอะไหล่ )',
+        'มีค่าใช้จ่ายในการ รับ - ส่ง (กรณีส่งซ่อม)',
+        'Service หลังการขาย ส่งสินค้าเข้าศูนย์บริการที่ดอนเมือง',
+    ].join('\n');
+}
+
+function getDefaultChequeNote() {
+    return 'ใบเสร็จรับเงินจะสมบูรณ์เมื่อเช็คผ่าน หจก.รูบี้ช๊อป โดยสามารถตรวจสอบได้ หรือโทรสอบถามเพิ่มเติมได้ที่เรียงรายละเอียดข้างล่าง';
+}
+
+function getNotesByDocumentType(documentType, quotation = {}) {
+    const additionalNotes =
+        typeof quotation.additional_notes === 'string' ? quotation.additional_notes.trim() : '';
+
+    if (documentType === 'quotation') {
+        return additionalNotes || getDefaultQuotationNotes();
+    }
+
+    return additionalNotes || `* ${getDefaultChequeNote()}`;
+}
+
+function decodeBasicHtmlEntities(text = '') {
+    return text
+        .replace(/&#x2f;|&#47;|&sol;/gi, '/')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'")
+        .replace(/&lpar;/gi, '(')
+        .replace(/&rpar;/gi, ')')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&');
+}
+
+function normalizeNoteLines(notes = '') {
+    const decodedNotes = decodeBasicHtmlEntities(String(notes || ''));
+
+    const normalizedNotes = decodedNotes
+        .replace(/\r\n?/g, '\n')
+        .replace(/<\s*\/?\s*p\s*>/gi, '\n')
+        .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+        .replace(/<\s*\/?\s*(ul|ol|li)\s*>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\u00a0/g, ' ');
+
+    return normalizedNotes
+        .split('\n')
+        .map(line => line.replace(/^\s*([*\-•]+)\s*/, '').trim())
+        .filter(Boolean);
+}
+
 // Function to generate footer based on document type
-function generateFooter(documentType) {
+function generateFooter(documentType, quotation = {}) {
+    const quotationFooterNotesHtml = normalizeNoteLines(getNotesByDocumentType('quotation', quotation))
+        .map(line => `<span class="english-text">${line}</span> <br />`)
+        .join('');
+
     switch (documentType) {
         case 'quotation':
             return `
                 <div class="footer">
                     <div class="payment-info-quotation">
-                        <strong class="thai-text">อื่นๆ:</strong><br />
-                        <span class="english-text">รับประกันซ่อมฟรี 1 ปี (ไม่รวมอะไหล่ )</span> <br />
-                        <span class="english-text">มีค่าใช้จ่ายในการ รับ - ส่ง (กรณีส่งซ่อม)</span><br />
-                        <span class="english-text">Service หลังการขาย ส่งสินค้าเข้าศูนย์บริการที่ดอนเมือง</span> <br />
+                        <strong class="thai-text">หมายเหตุ:</strong><br />
+                        ${quotationFooterNotesHtml}
                        
                     </div>
                     
@@ -190,7 +247,7 @@ function generateFooter(documentType) {
                               
                             </div>
                             <div class="approve-section-small">
-                                <div class="thai-text"ผู้ส่งสินค้า Delivered By</div>
+                                <div class="thai-text">ผู้ส่งสินค้า Delivered By</div>
                             </div>
                        
                             </div>
@@ -291,6 +348,25 @@ function generateFooter(documentType) {
                 </div>
             `;
     }
+}
+
+function generateMainNotesSection(documentType, quotation = {}) {
+    if (documentType === 'quotation') {
+        return '';
+    }
+
+    const notes = getNotesByDocumentType(documentType, quotation);
+    const notesHtml = normalizeNoteLines(notes).join('<br />');
+
+    return `
+            <!-- Notes Section - Left side -->
+            <div class="products-services selenote">
+                <h4 class="thai-text">หมายเหตุ</h4>
+                <div class="thai-text">
+                    ${notesHtml}
+                </div>
+            </div>
+    `;
 }
 
 // Function to generate HTML content with pagination support for Quotations
@@ -559,27 +635,8 @@ function generatePageContent(
             </table>
 
           
-           
-
-
-
-            <!-- Notes Section - Left side -->
-            <div class="products-services selenote">
-                <h4 class="thai-text">หมายเหตุ</h4>
-                <div class="thai-text">
-                    ${(() => {
-                        const notes = quotation.additional_notes || '* ใบเสร็จรับเงินจะสมบูรณ์เมื่อเช็คผ่าน หจก.รูบี้ช๊อป โดยสามารถตรวจสอบได้ หรือโทรสอบถามเพิ่มเติมได้ที่เรียงรายละเอียดข้างล่าง';
-                        
-                        const formattedNotes = notes
-                            .split("\n")                        // split by newline
-                            .filter(line => line.trim() !== "") // remove empty lines
-                            .map(line => `<li>${line.replace(/^-+\s*/, "")}</li>`) // strip leading "-"
-                            .join("");
-                        
-                        return `<ul>${formattedNotes}</ul>`;
-                    })()}
-                </div>
-            </div>            <!-- Totals Section - Right side -->
+            ${generateMainNotesSection(documentType, quotation)}
+            <!-- Totals Section - Right side -->
             <div class="totals-section">
                 <div class="totals-table">
                     ${generateTotalsSection(
@@ -602,7 +659,7 @@ function generatePageContent(
             </div>
 
             <!-- Footer -->
-            ${generateFooter(documentType)}
+            ${generateFooter(documentType, quotation)}
         </div>
     `;
 }
@@ -1608,7 +1665,13 @@ margin-left: -42px;
             }
             
             .payment-info-quotation{
-              margin-bottom: 20px;
+              position: fixed;
+              left: 60px;
+              bottom: 120px;
+              width: 430px;
+              margin-bottom: 0;
+              z-index: 999;
+              line-height: 1.35;
             }
 
             .collector-info {
@@ -1760,7 +1823,7 @@ margin-left: -42px;
                 margin: 8px 0;
                 text-align: center;
             }
-            .signature-line-bottom-receivedby,  {
+            .signature-line-bottom-receivedby {
               margin-left:10px;
             }
               .signature-line-bottom-receivedby-line {
@@ -1860,7 +1923,7 @@ margin-left: -42px;
                margin-bottom:20px;
             }
             
-            .bank-line,  {
+            .bank-line {
                 width:120px;
                 font-size: 8px;
                 line-height: 1.2;

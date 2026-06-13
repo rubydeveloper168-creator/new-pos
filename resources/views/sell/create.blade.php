@@ -18,12 +18,19 @@
 
 @section('content')
 
+@php
+	$walk_in_customer = $walk_in_customer ?? [];
+	$pos_settings = $pos_settings ?? [];
+@endphp
+
 <style>
 /* Fix Select2 search field styling */
 .select2-search__field {
     background-color: white !important;
     color: black !important;
     box-shadow: none !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .select2-search--dropdown .select2-search__field {
@@ -31,12 +38,369 @@
     color: black !important;
     border: 1px solid #ddd !important;
     box-shadow: none !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .select2-container--default .select2-search--dropdown .select2-search__field {
     background-color: white !important;
     color: black !important;
     box-shadow: none !important;
+}
+
+/* Ensure proper z-index for dropdowns */
+.select2-container--open {
+    z-index: 9999 !important;
+}
+
+.select2-dropdown {
+    z-index: 9999 !important;
+}
+
+/* Removed position:relative from .form-group — it caused stacking context that clipped Select2 dropdowns */
+
+/* Ensure Select2 container takes full width */
+#status + .select2-container,
+#invoice_scheme_id + .select2-container,
+#price_group + .select2-container {
+    width: 100% !important;
+    display: block !important;
+}
+
+#status + .select2-container .select2-selection,
+#invoice_scheme_id + .select2-container .select2-selection,
+#price_group + .select2-container .select2-selection {
+    width: 100% !important;
+}
+
+/* Fix customer dropdown - container sits between icon and button in input-group */
+#customer_id + .select2-container {
+    flex: 1 1 auto;
+    width: 100% !important;
+}
+
+/* Force select2 selection to full width inside input-group */
+.input-group .select2-container .select2-selection {
+    width: 100% !important;
+}
+
+/* Customer dropdown will be sized by JavaScript to match container */
+
+/* Force status/invoice/price group dropdowns to match select width */
+#status + .select2-container.select2-container--open .select2-dropdown,
+#invoice_scheme_id + .select2-container.select2-container--open .select2-dropdown,
+#price_group + .select2-container.select2-container--open .select2-dropdown {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Customer dropdown width/position handled via JS on select2:open */
+
+/* Hide billing address preview under customer field */
+#billing_address_block {
+    display: none !important;
+}
+
+/* Add more height/spacing to the top form section */
+#add_sell_form .box-solid > .box-body {
+    padding: 20px 15px 30px 15px !important;
+    min-height: 280px;
+}
+
+#add_sell_form .box-solid .form-group {
+    margin-bottom: 20px;
+}
+
+/* Disable customer outstanding balance warning - allow all customers to create bills */
+.contact_due_text {
+    display: none !important;
+}
+
+/* Customer Source radio buttons */
+.customer-source-option {
+    transition: all 0.15s ease;
+}
+.customer-source-option:hover {
+    border-color: #3c8dbc !important;
+    background: #f0f8ff !important;
+}
+.customer-source-option input[type="radio"]:checked ~ span {
+    font-weight: 600;
+    color: #fff;
+}
+.customer-source-option:has(input:checked) {
+    border-color: #3c8dbc !important;
+    background: #3c8dbc !important;
+    color: #fff !important;
+}
+.customer-source-option:has(input:checked) span {
+    color: #fff;
+}
+
+/* Fix select2 dropdowns in contact modal */
+.contact_modal .form-group {
+    position: relative;
+}
+
+.contact_modal .input-group .select2-container {
+    flex: 1 1 auto;
+}
+
+/* Dropdown width will be set by JavaScript */
+
+/* Product search dropdown with images */
+.ui-autocomplete {
+    box-sizing: border-box;
+}
+.pos-image-col {
+    width: 60px;
+}
+.ui-autocomplete .pos-search-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+.ui-autocomplete .pos-search-img {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: #fff;
+    flex: 0 0 auto;
+}
+.ui-autocomplete .pos-search-text {
+    flex: 1 1 auto;
+}
+
+/* Screenshot-matching legacy skin */
+.content-header h1 {
+    display: none;
+}
+.content {
+    background: #e9e9e9;
+    padding: 10px 15px;
+}
+#add_sell_form .box.box-solid {
+    border: 1px solid #cfcfcf;
+    box-shadow: none;
+    background: #e9e9e9;
+}
+#add_sell_form .box.box-solid > .box-body {
+    background: #e9e9e9;
+    padding: 14px;
+}
+#add_sell_form .form-control {
+    border: 1px solid #bfc3c7;
+    border-radius: 0;
+    box-shadow: none;
+    height: 31px;
+}
+#add_sell_form textarea.form-control {
+    height: auto;
+}
+#add_sell_form label {
+    font-weight: 700;
+    color: #333;
+}
+.legacy-sale-title {
+    border: 1px solid #cfcfcf;
+    background: #efefef;
+    margin: -14px -14px 0 -14px;
+    padding: 9px 14px;
+}
+.legacy-sale-title h3 {
+    margin: 0;
+    color: #3c8dbc;
+    font-size: 28px;
+    font-weight: 700;
+}
+.legacy-sale-intro {
+    margin: 0 -14px 14px -14px;
+    padding: 10px 14px;
+    border: 1px solid #cfcfcf;
+    border-top: 0;
+    background: #efefef;
+    color: #333;
+}
+.legacy-warning-strip {
+    border: 1px solid #e9ddb6;
+    background: #f7f1df;
+    color: #7a6326;
+    font-weight: 700;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+}
+.legacy-search-row {
+    width: 100%;
+    margin-left: 0 !important;
+}
+.legacy-search-row,
+.pos_product_div {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+.legacy-search-row .form-group {
+    margin-bottom: 0 !important;
+}
+.legacy-search-shell {
+    display: flex;
+    align-items: center;
+    border: 1px solid #d2d2d2;
+    background: #ececec;
+    padding: 8px;
+}
+.legacy-search-left {
+    width: 36px;
+    height: 42px;
+    border: 1px solid #c6c6c6;
+    border-right: 0;
+    border-radius: 0 !important;
+    background: #e4e4e4;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0;
+    padding: 0;
+}
+.legacy-search-left .fa {
+    font-size: 18px;
+}
+.legacy-search-input-wrap {
+    flex: 1;
+}
+.legacy-search-input {
+    height: 42px !important;
+    border: 1px solid #c6c6c6 !important;
+    border-radius: 0 !important;
+    background: #f5f5f5;
+    padding: 8px 14px;
+    box-shadow: none !important;
+    font-size: 18px;
+}
+.legacy-search-input:focus {
+    border-color: #5aa7e6 !important;
+}
+.legacy-search-input::placeholder {
+    color: #666;
+    opacity: 1;
+}
+.legacy-search-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-left: 0;
+}
+.legacy-search-plus {
+    width: 38px;
+    height: 42px;
+    border-radius: 0 !important;
+    border: 1px solid #c6c6c6;
+    border-left: 0;
+    background: #e9e9e9;
+    color: #428bca;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.legacy-search-config {
+    width: 48px;
+    height: 42px;
+    border-radius: 0 !important;
+    border: 1px solid #c6c6c6;
+    border-left: 0;
+    background: #e9e9e9;
+    color: #428bca;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.legacy-search-plus .fa,
+.legacy-search-config .fa {
+    font-size: 22px;
+}
+.customer-source-option {
+    border-radius: 3px !important;
+    padding: 4px 10px !important;
+    border-color: #c6c9cc !important;
+    background: #f9f9f9 !important;
+}
+.customer-source-option input[type="radio"] {
+    margin-right: 4px !important;
+}
+#pos_table thead th {
+    background: #428bca;
+    color: #fff;
+    border-color: #3f83ba;
+    font-weight: 700;
+}
+#pos_table .legacy-qty-inline,
+#pos_table .legacy-discount-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+#pos_table .legacy-qty-inline .input-group {
+    width: 120px;
+    min-width: 120px;
+}
+#pos_table .legacy-qty-inline .sub_unit,
+#pos_table .legacy-qty-inline .legacy-unit-label {
+    width: 95px;
+    min-width: 95px;
+}
+#pos_table .legacy-qty-inline .legacy-unit-label {
+    font-size: 12px;
+    color: #666;
+    line-height: 1;
+}
+#pos_table .legacy-discount-inline .row_discount_amount {
+    width: 95px;
+    min-width: 95px;
+}
+#pos_table .legacy-discount-inline .row_discount_type {
+    width: 88px;
+    min-width: 88px;
+}
+#pos_table th.pos-warranty-col,
+#pos_table td.pos-warranty-col {
+    display: none !important;
+}
+.pos_product_div {
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100%;
+    clear: both;
+    display: block;
+}
+.legacy-post-table-section {
+    clear: both;
+    margin-top: 8px;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+#add_sell_form .input-group-addon {
+    border-color: #bfc3c7;
+    border-radius: 0;
+    background: #e8e8e8;
+}
+#add_sell_form .input-group-btn .btn {
+    border-radius: 0;
+}
+#add_sell_form .table {
+    background: #fff;
+}
+#add_sell_form .table-bordered > thead > tr > th,
+#add_sell_form .table-bordered > tbody > tr > td {
+    border-color: #cfd3d6;
 }
 </style>
 
@@ -85,6 +449,12 @@
 	<div class="row">
 		<div class="col-md-12 col-sm-12">
 			@component('components.widget', ['class' => 'box-solid'])
+				<div class="legacy-sale-title">
+					<h3><i class="fa-fw fa fa-plus"></i> {{ $title }}</h3>
+				</div>
+				<div class="legacy-sale-intro">
+					กรุณากรอกข้อมูลด้านล่าง
+				</div>
 				{!! Form::hidden('location_id', !empty($default_location) ? $default_location->id : null , ['id' => 'location_id', 'data-receipt_printer_type' => !empty($default_location->receipt_printer_type) ? $default_location->receipt_printer_type : 'browser', 'data-default_payment_accounts' => !empty($default_location) ? $default_location->default_payment_accounts : '']); !!}
 
 				@if(!empty($price_groups))
@@ -100,7 +470,7 @@
 										$selected_price_group = !empty($default_price_group_id) && array_key_exists($default_price_group_id, $price_groups) ? $default_price_group_id : null;
 									@endphp
 									{!! Form::hidden('hidden_price_group', key($price_groups), ['id' => 'hidden_price_group']) !!}
-									{!! Form::select('price_group', $price_groups, $selected_price_group, ['class' => 'form-control select2', 'id' => 'price_group']); !!}
+									{!! Form::select('price_group', $price_groups, $selected_price_group, ['class' => 'form-control select2-price-group', 'id' => 'price_group']); !!}
 									<span class="input-group-addon">
 										@show_tooltip(__('lang_v1.price_group_help_text'))
 									</span> 
@@ -149,7 +519,65 @@
 					</div>
 				@endif
 				<div class="clearfix"></div>
-				<div class="@if(!empty($commission_agent)) col-sm-3 @else col-sm-4 @endif">
+				<div class="col-sm-12">
+					<div class="legacy-warning-strip">กรุณาเลือกสิ่งเหล่านี้ก่อนเพิ่มสินค้า</div>
+				</div>
+				<div class="col-sm-4">
+					<div class="form-group">
+						{!! Form::label('transaction_date', __('sale.sale_date') . ':*') !!}
+						<div class="input-group">
+							<span class="input-group-addon">
+								<i class="fa fa-calendar"></i>
+							</span>
+							{!! Form::text('transaction_date', $default_datetime, ['class' => 'form-control', 'readonly', 'required']); !!}
+						</div>
+					</div>
+				</div>
+				@can('edit_invoice_number')
+				<div class="col-sm-4">
+					<div class="form-group">
+						{!! Form::label('invoice_no', $sale_type == 'sales_order' ? __('restaurant.order_no') : __('sale.invoice_no') . ':') !!}
+						{!! Form::text('invoice_no', null, ['class' => 'form-control', 'placeholder' => $sale_type == 'sales_order' ? __('restaurant.order_no') : __('sale.invoice_no')]); !!}
+						<p class="help-block">@lang('lang_v1.keep_blank_to_autogenerate')</p>
+					</div>
+				</div>
+				@endcan
+				<div class="col-sm-4">
+		          <div class="form-group">
+		            <div class="multi-input">
+		            @php
+						$is_pay_term_required = !empty($pos_settings['is_pay_term_required'] ?? null);
+					@endphp
+		              {!! Form::label('pay_term_number', __('contact.pay_term') . ':') !!} @show_tooltip(__('tooltip.pay_term'))
+		              <br/>
+		              {!! Form::number('pay_term_number', $walk_in_customer['pay_term_number'] ?? null, ['class' => 'form-control width-40 pull-left', 'placeholder' => __('contact.pay_term'), 'required' => ($is_pay_term_required ?? false)]); !!}
+
+		              {!! Form::select('pay_term_type',
+		              	['months' => __('lang_v1.months'),
+		              		'days' => __('lang_v1.days')],
+		              		$walk_in_customer['pay_term_type'] ?? null,
+		              	['class' => 'form-control width-60 pull-left','placeholder' => __('messages.please_select'), 'required' => ($is_pay_term_required ?? false)]); !!}
+		            </div>
+		          </div>
+		        </div>
+
+				<div class="clearfix"></div>
+
+				@php
+					// Always show status dropdown; when status is provided in URL (e.g. quotation)
+					// use it as the selected value.
+					$default_status = !empty($status) ? $status : 'proforma';
+				@endphp
+				<div class="col-sm-4">
+					<div class="form-group">
+						{!! Form::label('status', __('sale.status') . ':*') !!}
+						{!! Form::select('status', $statuses, $default_status, ['class' => 'form-control select2-status', 'id' => 'status', 'placeholder' => __('messages.please_select'), 'required']); !!}
+					</div>
+				</div>
+				@if(in_array($default_status, ['draft', 'quotation']))
+					<input type="hidden" id="disable_qty_alert">
+				@endif
+				<div class="col-sm-4">
 					<div class="form-group">
 						{!! Form::label('contact_id', __('contact.customer') . ':*') !!}
 						<div class="input-group">
@@ -157,19 +585,22 @@
 								<i class="fa fa-user"></i>
 							</span>
 							<input type="hidden" id="default_customer_id" 
-							value="{{ $walk_in_customer['id']}}" >
+							value="{{ $walk_in_customer['id'] ?? '' }}" >
 							<input type="hidden" id="default_customer_name" 
-							value="{{ $walk_in_customer['name']}}" >
-							<input type="hidden" id="default_customer_balance" value="{{ $walk_in_customer['balance'] ?? ''}}" >
-							<input type="hidden" id="default_customer_address" value="{{ $walk_in_customer['shipping_address'] ?? ''}}" >
+							value="{{ $walk_in_customer['name'] ?? '' }}" >
+							<input type="hidden" id="default_customer_balance" value="{{ $walk_in_customer['balance'] ?? '' }}" >
+							<input type="hidden" id="default_customer_address" value="{{ $walk_in_customer['shipping_address'] ?? '' }}" >
 							@if(!empty($walk_in_customer['price_calculation_type']) && $walk_in_customer['price_calculation_type'] == 'selling_price_group')
 								<input type="hidden" id="default_selling_price_group" 
-							value="{{ $walk_in_customer['selling_price_group_id'] ?? ''}}" >
+							value="{{ $walk_in_customer['selling_price_group_id'] ?? '' }}" >
 							@endif
 							{!! Form::select('contact_id', 
 								[], null, ['class' => 'form-control mousetrap', 'id' => 'customer_id', 'placeholder' => 'Enter Customer name / phone / Tax ID', 'required']); !!}
 							<span class="input-group-btn">
 								<button type="button" class="btn btn-default bg-white btn-flat add_new_customer" data-name=""><i class="fa fa-plus-circle text-primary fa-lg"></i></button>
+								<button type="button" class="btn btn-warning bg-white btn-flat edit_customer_btn" title="Edit Customer Details">
+									<i class="fa fa-edit text-warning fa-lg"></i>
+								</button>
 							</span>
 						</div>
 						<small class="text-danger hide contact_due_text"><strong>@lang('account.customer_due'):</strong> <span></span></small>
@@ -186,49 +617,45 @@
 							</small>
 						</div>
 					</div>
-					<small>
-					<strong>
-						@lang('lang_v1.billing_address'):
-					</strong>
-					<div id="billing_address_div">
-						{!! $walk_in_customer['contact_address'] ?? '' !!}
+					<div class="text-muted small hide" id="billing_address_block">
+						<strong>
+							@lang('lang_v1.billing_address'):
+						</strong>
+						<div id="billing_address_div">
+							{!! $walk_in_customer['contact_address'] ?? '' !!}
+						</div>
 					</div>
-					<br>
-					<strong>
-						@lang('lang_v1.shipping_address'):
-					</strong>
-					<div id="shipping_address_div">
-						{{$walk_in_customer['supplier_business_name'] ?? ''}},<br>
-						{{$walk_in_customer['name'] ?? ''}},<br>
-						{{$walk_in_customer['shipping_address'] ?? ''}}
-					</div>					
-					</small>
 				</div>
+				@if($sale_type != 'sales_order')
+					<div class="col-sm-4">
+						<div class="form-group">
+							{!! Form::label('invoice_scheme_id', __('invoice.invoice_scheme') . ':') !!}
+							@php
+								// Set default invoice scheme based on status
+								// Default (no status or proforma): TAX-INVOICE (id: 4)
+								// Quotation: Quotation (id: 1)
+								// Final: BILLING-RECEIVE (id: 5)
 
-				<div class="col-md-3">
-		          <div class="form-group">
-		            <div class="multi-input">
-		            @php
-						$is_pay_term_required = !empty($pos_settings['is_pay_term_required']);
-					@endphp
-		              {!! Form::label('pay_term_number', __('contact.pay_term') . ':') !!} @show_tooltip(__('tooltip.pay_term'))
-		              <br/>
-		              {!! Form::number('pay_term_number', $walk_in_customer['pay_term_number'], ['class' => 'form-control width-40 pull-left', 'placeholder' => __('contact.pay_term'), 'required' => $is_pay_term_required]); !!}
-
-		              {!! Form::select('pay_term_type', 
-		              	['months' => __('lang_v1.months'), 
-		              		'days' => __('lang_v1.days')], 
-		              		$walk_in_customer['pay_term_type'], 
-		              	['class' => 'form-control width-60 pull-left','placeholder' => __('messages.please_select'), 'required' => $is_pay_term_required]); !!}
-		            </div>
-		          </div>
-		        </div>
-
+								if (!empty($status) && $status == 'quotation') {
+									// For quotation: use "Quotation (ใบเสนอราคา)" scheme (id: 1)
+									$default_invoice_scheme_id = 1;
+								} elseif (!empty($status) && $status == 'final') {
+									// For final bills: use "BILLING-RECEIVE" scheme (id: 5)
+									$default_invoice_scheme_id = 5;
+								} else {
+									// Default (proforma or no status): use "TAX-INVOICE ( ใบกำกับภาษี / ใบแจ้งหนี้ / )" scheme (id: 4)
+									$default_invoice_scheme_id = 4;
+								}
+							@endphp
+							{!! Form::select('invoice_scheme_id', $invoice_schemes, $default_invoice_scheme_id, ['class' => 'form-control select2-invoice-scheme', 'id' => 'invoice_scheme_id', 'placeholder' => __('messages.please_select')]); !!}
+						</div>
+					</div>
+				@endif
 				@if(!empty($commission_agent))
 				@php
 					$is_commission_agent_required = !empty($pos_settings['is_commission_agent_required']);
 				@endphp
-				<div class="col-sm-3">
+				<div class="col-sm-4">
 					<div class="form-group">
 					{!! Form::label('commission_agent', __('lang_v1.commission_agent') . ':') !!}
 					{!! Form::select('commission_agent', 
@@ -236,69 +663,6 @@
 					</div>
 				</div>
 				@endif
-				<div class="@if(!empty($commission_agent)) col-sm-3 @else col-sm-4 @endif">
-					<div class="form-group">
-						{!! Form::label('transaction_date', __('sale.sale_date') . ':*') !!}
-						<div class="input-group">
-							<span class="input-group-addon">
-								<i class="fa fa-calendar"></i>
-							</span>
-							{!! Form::text('transaction_date', $default_datetime, ['class' => 'form-control', 'readonly', 'required']); !!}
-						</div>
-					</div>
-				</div>
-				@if(!empty($status))
-					<input type="hidden" name="status" id="status" value="{{$status}}">
-
-					@if(in_array($status, ['draft', 'quotation']))
-						<input type="hidden" id="disable_qty_alert">
-					@endif
-				@else
-					<div class="@if(!empty($commission_agent)) col-sm-3 @else col-sm-4 @endif">
-						<div class="form-group">
-							{!! Form::label('status', __('sale.status') . ':*') !!}
-							@php
-								// Set default status to null to show placeholder
-								$default_status = null;
-							@endphp
-							{!! Form::select('status', $statuses, $default_status, ['class' => 'form-control select2', 'placeholder' => __('messages.please_select'), 'required']); !!}
-						</div>
-					</div>
-				@endif
-				@if($sale_type != 'sales_order')
-					<div class="col-sm-3">
-						<div class="form-group">
-							{!! Form::label('invoice_scheme_id', __('invoice.invoice_scheme') . ':') !!}
-							@php
-								// Set default invoice scheme to null to show placeholder
-								$default_invoice_scheme_id = null;
-								
-								// Only set specific scheme if status is explicitly provided via URL parameter
-								if (!empty($status) && $status == 'quotation') {
-									// For quotation: use "Quotation (ใบเสนอราคา)" scheme (id: 1) - QUOTE2025/
-									$default_invoice_scheme_id = 1;
-								} elseif (!empty($status) && $status == 'proforma') {
-									// For proforma: use "TAX-INVOICE ( ใบกำกับภาษี / ใบแจ้งหนี้ / )" scheme (id: 4) - VT2025/
-									$default_invoice_scheme_id = 4;
-								} elseif (!empty($status) && $status == 'final') {
-									// For final bills: use "BILLING-RECEIVE" scheme (id: 5) - IPAY2025/
-									$default_invoice_scheme_id = 5;
-								}
-								// Otherwise, leave as null to show "Please select"
-							@endphp
-							{!! Form::select('invoice_scheme_id', $invoice_schemes, $default_invoice_scheme_id, ['class' => 'form-control select2', 'placeholder' => __('messages.please_select')]); !!}
-						</div>
-					</div>
-				@endif
-					@can('edit_invoice_number')
-					<div class="col-sm-3">
-						<div class="form-group">
-							{!! Form::label('invoice_no', $sale_type == 'sales_order' ? __('restaurant.order_no') : __('sale.invoice_no') . ':') !!}
-							{!! Form::text('invoice_no', null, ['class' => 'form-control', 'placeholder' => $sale_type == 'sales_order' ? __('restaurant.order_no') : __('sale.invoice_no')]); !!}
-							<p class="help-block">@lang('lang_v1.keep_blank_to_autogenerate')</p>
-						</div>
-					</div>
-					@endcan
 				
 				@php
 			        $custom_field_1_label = !empty($custom_labels['sell']['custom_field_1']) ? $custom_labels['sell']['custom_field_1'] : '';
@@ -377,7 +741,7 @@
 				        </div>
 				    </div>
 		        @endif
-		        <div class="col-sm-3">
+		        <div class="col-sm-3" style="display:none;">
 	                <div class="form-group">
 	                    {!! Form::label('upload_document', __('purchase.attach_document') . ':') !!}
 	                    {!! Form::file('sell_document', ['id' => 'upload_document', 'accept' => implode(',', array_keys(config('constants.document_upload_mimes_types')))]); !!}
@@ -403,27 +767,31 @@
 		        	<span id="restaurant_module_span">
 		        	</span>
 		        @endif
-			@endcomponent
-
-			@component('components.widget', ['class' => 'box-solid'])
-				<div class="col-sm-10 col-sm-offset-1">
+					<div class="col-sm-12 legacy-search-row">
 					<div class="form-group">
-						<div class="input-group">
-							<div class="input-group-btn">
-								<button type="button" class="btn btn-default bg-white btn-flat" data-toggle="modal" data-target="#configure_search_modal" title="{{__('lang_v1.configure_product_search')}}"><i class="fas fa-search-plus"></i></button>
+						<div class="legacy-search-shell">
+							<button type="button" class="btn legacy-search-left" data-toggle="modal" data-target="#configure_search_modal" title="{{__('lang_v1.configure_product_search')}}">
+								<i class="fa fa-barcode"></i>
+							</button>
+							<div class="legacy-search-input-wrap">
+								{!! Form::text('search_product', null, ['class' => 'form-control mousetrap legacy-search-input', 'id' => 'search_product', 'placeholder' => 'โปรดเพิ่มสินค้าในรายการ',
+								'disabled' => is_null($default_location)? true : false,
+								'autofocus' => is_null($default_location)? false : true,
+								]); !!}
 							</div>
-							{!! Form::text('search_product', null, ['class' => 'form-control mousetrap', 'id' => 'search_product', 'placeholder' => __('lang_v1.search_product_placeholder'),
-							'disabled' => is_null($default_location)? true : false,
-							'autofocus' => is_null($default_location)? false : true,
-							]); !!}
-							<span class="input-group-btn">
-								<button type="button" class="btn btn-default bg-white btn-flat pos_add_quick_product" data-href="{{action([\App\Http\Controllers\ProductController::class, 'quickAdd'])}}" data-container=".quick_add_product_modal"><i class="fa fa-plus-circle text-primary fa-lg"></i></button>
-							</span>
+							<div class="legacy-search-actions">
+								<button type="button" class="btn legacy-search-plus pos_add_quick_product" data-href="{{action([\App\Http\Controllers\ProductController::class, 'quickAdd'])}}" data-container=".quick_add_product_modal" title="{{ __('messages.add') }}">
+									<i class="fa fa-plus-circle"></i>
+								</button>
+								<button type="button" class="btn legacy-search-config" data-toggle="modal" data-target="#configure_search_modal" title="{{__('lang_v1.configure_product_search')}}">
+									<i class="fa fa-credit-card"></i>
+								</button>
+							</div>
 						</div>
 					</div>
 				</div>
 
-				<div class="row col-sm-12 pos_product_div" style="min-height: 500px; max-height: 600px; overflow-y: auto;">
+				<div class="pos_product_div">
 
 					<input type="hidden" name="sell_price_tax" id="sell_price_tax" value="{{$business_details->sell_price_tax}}">
 
@@ -442,9 +810,6 @@
 							<tr>
 								<th class="text-center">	
 									@lang('sale.product')
-								</th>
-								<th class="text-center">
-									@lang('lang_v1.description')
 								</th>
 								<th class="text-center">
 									@lang('sale.qty')
@@ -467,7 +832,7 @@
 									@lang('sale.price_inc_tax')
 								</th>
 								@if(!empty($common_settings['enable_product_warranty']))
-									<th>@lang('lang_v1.warranty')</th>
+									<th class="pos-warranty-col">@lang('lang_v1.warranty')</th>
 								@endif
 								<th class="text-center">
 									@lang('sale.subtotal')
@@ -493,17 +858,17 @@
 						</tr>
 					</table>
 					</div>
-				</div>
-			@endcomponent
-			@component('components.widget', ['class' => 'box-solid'])
-				<div class="col-md-4  @if($sale_type == 'sales_order') hide @endif">
-			        <div class="form-group">
-			            {!! Form::label('discount_type', __('sale.discount_type') . ':*' ) !!}
+						</div>
+						<div class="clearfix"></div>
+						<div class="row legacy-post-table-section">
+						<div class="col-md-4  @if($sale_type == 'sales_order') hide @endif">
+				        <div class="form-group">
+				            {!! Form::label('discount_type', __('sale.discount_type') . ':*' ) !!}
 			            <div class="input-group">
 			                <span class="input-group-addon">
 			                    <i class="fa fa-info"></i>
 			                </span>
-			                {!! Form::select('discount_type', ['fixed' => __('lang_v1.fixed'), 'percentage' => __('lang_v1.percentage')], 'percentage' , ['class' => 'form-control','placeholder' => __('messages.please_select'), 'required', 'data-default' => 'percentage']); !!}
+			                {!! Form::select('discount_type', ['fixed' => __('lang_v1.fixed'), 'percentage' => __('lang_v1.percentage')], 'fixed' , ['class' => 'form-control','placeholder' => __('messages.please_select'), 'required', 'data-default' => 'fixed']); !!}
 			            </div>
 			        </div>
 			    </div>
@@ -580,27 +945,54 @@
 					<span class="display_currency" id="order_tax">0</span>
 			    </div>				
 				
-			    <div class="col-md-12">
-			    	<div class="form-group">
+				    <div class="col-md-12">
+				    	<div class="form-group">
 						{!! Form::label('sell_note',__('sale.sell_note')) !!}
 						{!! Form::textarea('sale_note', null, ['class' => 'form-control', 'rows' => 3]); !!}
 					</div>
-			    </div>
-				<input type="hidden" name="is_direct_sale" value="1">
+				    </div>
+				<div class="col-md-12">
+					<div class="form-group" style="margin-top: 5px;">
+						<label>Customer Source:</label>
+						<div class="customer-source-radios" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
+							<label class="customer-source-option" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 10px; border: 1px solid #ddd; border-radius: 20px; background: #fff; font-weight: normal; font-size: 13px; margin: 0;">
+								<input type="radio" name="customer_source_id" value="" checked style="margin: 0;">
+								<span>ไม่ระบุ</span>
+							</label>
+							@foreach($customer_sources as $source)
+								<label class="customer-source-option" style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 10px; border: 1px solid #ddd; border-radius: 20px; background: #fff; font-weight: normal; font-size: 13px; margin: 0;">
+									<input type="radio" name="customer_source_id" value="{{ $source->id }}" style="margin: 0;">
+									@if($source->logo_url)
+										<img src="{{ $source->logo_url }}" alt="{{ $source->name }}" style="width: 20px; height: 20px; object-fit: contain; border-radius: 50%;">
+									@endif
+									<span>{{ $source->name }}</span>
+								</label>
+							@endforeach
+						</div>
+					</div>
+				</div>
+				    </div>
+					<input type="hidden" name="is_direct_sale" value="1">
 			@endcomponent
 			@component('components.widget', ['class' => 'box-solid'])
-			<div class="col-md-4">
-				<div class="form-group">
-		            {!! Form::label('shipping_details', __('sale.shipping_details')) !!}
+				<div class="col-md-12 text-right" style="margin-bottom: 10px;">
+					<button type="button" class="btn btn-default btn-sm toggle-section-btn" data-target="#create_shipping_section_fields" data-show-text="แสดงรายละเอียดการจัดส่ง" data-hide-text="ซ่อนรายละเอียดการจัดส่ง">
+						<i class="fa fa-chevron-down"></i> <span class="toggle-text">แสดงรายละเอียดการจัดส่ง</span>
+					</button>
+				</div>
+				<div id="create_shipping_section_fields" style="display: none;">
+				<div class="col-md-4">
+					<div class="form-group">
+			            {!! Form::label('shipping_details', __('sale.shipping_details')) !!}
 		            {!! Form::textarea('shipping_details',null, ['class' => 'form-control','placeholder' => __('sale.shipping_details') ,'rows' => '3', 'cols'=>'30']); !!}
 		        </div>
 			</div>
-			<div class="col-md-4">
+			{{-- <div class="col-md-4">
 				<div class="form-group">
 		            {!! Form::label('shipping_address', __('lang_v1.shipping_address')) !!}
 		            {!! Form::textarea('shipping_address',null, ['class' => 'form-control','placeholder' => __('lang_v1.shipping_address') ,'rows' => '3', 'cols'=>'30']); !!}
 		        </div>
-			</div>
+			</div> --}}
 			<div class="col-md-4">
 				<div class="form-group">
 					{!!Form::label('shipping_charges', __('sale.shipping_charges'))!!}
@@ -793,12 +1185,13 @@
 				<input type="hidden" name="round_off_amount" 
 					id="round_off_amount" value=0>
 				@endif
-		    	<div><b>@lang('sale.total_payable'): </b>
-					<input type="hidden" name="final_total" id="final_total_input">
-					<span id="total_payable">0</span>
+			    	<div><b>@lang('sale.total_payable'): </b>
+						<input type="hidden" name="final_total" id="final_total_input">
+						<span id="total_payable">0</span>
+					</div>
+			    </div>
 				</div>
-		    </div>
-			@endcomponent
+				@endcomponent
 		</div>
 	</div>
 	@if(!empty($common_settings['is_enabled_export']) && $sale_type != 'sales_order')
@@ -829,11 +1222,17 @@
 			$payment_body_id = '';
 		}
 	@endphp
-	@if((empty($status) || (!in_array($status, ['quotation', 'draft'])) || $is_enabled_download_pdf) && $sale_type != 'sales_order')
-		@can('sell.payments')
-			@component('components.widget', ['class' => 'box-solid', 'id' => $payment_body_id, 'title' => __('purchase.add_payment')])
-			@if($is_enabled_download_pdf)
-				<div class="well row">
+		@if((empty($status) || (!in_array($status, ['quotation', 'draft'])) || $is_enabled_download_pdf) && $sale_type != 'sales_order')
+			@can('sell.payments')
+				@component('components.widget', ['class' => 'box-solid', 'id' => $payment_body_id, 'title' => __('purchase.add_payment')])
+				<div class="col-md-12 text-right" style="margin-bottom: 10px;">
+					<button type="button" class="btn btn-default btn-sm toggle-section-btn" data-target="#create_payment_section_fields" data-show-text="แสดงเพิ่มการชำระเงิน" data-hide-text="ซ่อนเพิ่มการชำระเงิน">
+						<i class="fa fa-chevron-down"></i> <span class="toggle-text">แสดงเพิ่มการชำระเงิน</span>
+					</button>
+				</div>
+				<div id="create_payment_section_fields" style="display: none;">
+				@if($is_enabled_download_pdf)
+					<div class="well row">
 					<div class="col-md-6">
 						<div class="form-group">
 							{!! Form::label("prefer_payment_method" , __('lang_v1.prefer_payment_method') . ':') !!}
@@ -860,8 +1259,8 @@
 					</div>
 				</div>
 			@endif
-			@if(empty($status) || !in_array($status, ['quotation', 'draft']))
-				<div class="payment_row" @if($is_enabled_download_pdf) id="payment_rows_div" @endif>
+				@if(empty($status) || !in_array($status, ['quotation', 'draft']))
+					<div class="payment_row" @if($is_enabled_download_pdf) id="payment_rows_div" @endif>
 					<div class="row">
 						<div class="col-md-12 mb-12">
 							<strong>@lang('lang_v1.advance_balance'):</strong> <span id="advance_balance_text"></span>
@@ -928,17 +1327,19 @@
 							<div class="pull-right"><strong>@lang('lang_v1.balance'):</strong> <span class="balance_due">0.00</span></div>
 						</div>
 					</div>
+					</div>
+				@endif
 				</div>
-			@endif
-			@endcomponent
-		@endcan
-	@endif
+				@endcomponent
+			@endcan
+		@endif
 	
 	<div class="row">
 		{!! Form::hidden('is_save_and_print', 0, ['id' => 'is_save_and_print']); !!}
 		<div class="col-sm-12 text-center" style="margin-top: 20px;">
 			<button type="button" id="submit-sell" class="btn btn-primary btn-lg">@lang('messages.save')</button>
-			<button type="button" id="save-and-print" class="btn btn-success btn-lg">@lang('lang_v1.save_and_print')</button>
+			{{-- Hidden: Save and Print button --}}
+			{{-- <button type="button" id="save-and-print" class="btn btn-success btn-lg">@lang('lang_v1.save_and_print')</button> --}}
 		</div>
 	</div>
 	
@@ -950,7 +1351,7 @@
 </section>
 
 <div class="modal fade contact_modal" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel">
-	@include('contact.create', ['quick_add' => true])
+	@include('contact.create_compact_customer', ['quick_add' => true])
 </div>
 <!-- /.content -->
 <div class="modal fade register_details_modal" tabindex="-1" role="dialog" 
@@ -979,50 +1380,474 @@
     <script type="text/javascript">
     	console.log('========== CREATE.BLADE.PHP SCRIPT LOADED ==========');
     	console.log('Timestamp:', new Date().toISOString());
-    	
+
     	// Set current user ID for assignments
     	window.currentUserId = {{ auth()->user()->id ?? 'null' }};
-    	
+
     	// PDF Server URL from Laravel config (set in .env as API_PDF_SERVER_URL)
     	const PDF_SERVER_URL = '{{ config("constants.pdf_server_url") }}';
     	console.log('PDF_SERVER_URL:', PDF_SERVER_URL);
-    	
+
     	$(document).ready( function() {
     		console.log('[DEBUG] document.ready fired');
 
-            function resetSelect2DropdownParent($select) {
-                var $parent = $select.closest('.input-group');
-                if ($parent.length === 0) {
-                    $parent = $select.parent();
-                }
-                var existing = $select.data('select2');
-                if (existing) {
-                    var options = $.extend(true, {}, existing.options.options);
-                    options.dropdownParent = $parent;
-                    $select.select2('destroy');
-                    $select.select2(options);
-                } else {
-                    $select.select2({ dropdownParent: $parent });
-                }
-            }
+    		// Fix price_group select2 dropdown positioning
+    		var $priceGroupSelect = $('#price_group');
+    		if ($priceGroupSelect.length && !$priceGroupSelect.prop('type') === 'hidden') {
+    			var $priceGroupFormGroup = $priceGroupSelect.closest('.form-group');
+    			var priceGroupOptions = {
+    				dropdownParent: $priceGroupFormGroup,
+    				width: '100%',
+    				dropdownAutoWidth: false
+    			};
+    			if ($('html').attr('dir') == 'rtl') {
+    				priceGroupOptions.dir = 'rtl';
+    			}
+    			if ($priceGroupSelect.data('select2')) {
+    				$priceGroupSelect.select2('destroy');
+    			}
+    			$priceGroupSelect.select2(priceGroupOptions);
 
-            $('.select2').each(function() {
-                resetSelect2DropdownParent($(this));
-            });
-            if ($('#customer_id').length) {
-                resetSelect2DropdownParent($('#customer_id'));
-            }
-    		
+    			// Ensure dropdown width matches select width when opened
+    			$priceGroupSelect.on('select2:open', function() {
+    				setTimeout(function() {
+    					var $container = $priceGroupSelect.next('.select2-container');
+    					var selectWidth = $container.outerWidth();
+    					$priceGroupFormGroup.find('.select2-dropdown').css({
+    						'width': selectWidth + 'px',
+    						'min-width': selectWidth + 'px'
+    					});
+    				}, 0);
+    			});
+    		}
+
+    		// Fix status select2 dropdown offset in POS layout
+    		var $statusSelect = $('#status');
+    		if ($statusSelect.length && $statusSelect.is('select')) {
+    			var $formGroup = $statusSelect.closest('.form-group');
+    			var options = {
+    				dropdownParent: $formGroup,
+    				width: '100%',
+    				dropdownAutoWidth: false
+    			};
+    			if ($('html').attr('dir') == 'rtl') {
+    				options.dir = 'rtl';
+    			}
+    			if ($statusSelect.data('select2')) {
+    				$statusSelect.select2('destroy');
+    			}
+    			$statusSelect.select2(options);
+
+    			// Ensure dropdown width matches select width when opened
+    			$statusSelect.on('select2:open', function() {
+    				setTimeout(function() {
+    					var $container = $statusSelect.next('.select2-container');
+    					var selectWidth = $container.outerWidth();
+    					// Find the dropdown within the form-group parent
+    					$formGroup.find('.select2-dropdown').css({
+    						'width': selectWidth + 'px',
+    						'min-width': selectWidth + 'px'
+    					});
+    				}, 0);
+    			});
+
+    			// Auto-change invoice scheme when status changes
+    			$statusSelect.on('change', function() {
+    				var status = $(this).val();
+    				var $invoiceScheme = $('#invoice_scheme_id');
+
+    				if ($invoiceScheme.length) {
+    					var schemeId = null;
+
+    					// Map status to invoice scheme:
+    					// quotation -> Quotation (id: 1)
+    					// proforma -> TAX-INVOICE (id: 4)
+    					// final -> BILLING-RECEIVE (id: 5)
+    					if (status == 'quotation') {
+    						schemeId = 1;  // Quotation (ใบเสนอราคา)
+    					} else if (status == 'proforma') {
+    						schemeId = 4;  // TAX-INVOICE ( ใบกำกับภาษี / ใบแจ้งหนี้ / )
+    					} else if (status == 'final') {
+    						schemeId = 5;  // BILLING-RECEIVE
+    					}
+
+    					if (schemeId) {
+    						$invoiceScheme.val(schemeId).trigger('change');
+    					}
+    				}
+    			});
+    		}
+
+    		// Fix invoice scheme select2 dropdown offset
+    		var $invoiceSchemeSelect = $('#invoice_scheme_id');
+    		if ($invoiceSchemeSelect.length) {
+    			var $invoiceFormGroup = $invoiceSchemeSelect.closest('.form-group');
+    			var invoiceOptions = {
+    				dropdownParent: $invoiceFormGroup,
+    				width: '100%',
+    				dropdownAutoWidth: false
+    			};
+    			if ($('html').attr('dir') == 'rtl') {
+    				invoiceOptions.dir = 'rtl';
+    			}
+    			if ($invoiceSchemeSelect.data('select2')) {
+    				$invoiceSchemeSelect.select2('destroy');
+    			}
+    			$invoiceSchemeSelect.select2(invoiceOptions);
+
+    			// Ensure dropdown width matches select width when opened
+    			$invoiceSchemeSelect.on('select2:open', function() {
+    				setTimeout(function() {
+    					var $container = $invoiceSchemeSelect.next('.select2-container');
+    					var selectWidth = $container.outerWidth();
+    					$invoiceFormGroup.find('.select2-dropdown').css({
+    						'width': selectWidth + 'px',
+    						'min-width': selectWidth + 'px'
+    					});
+    				}, 0);
+    			});
+    		}
+
+
+	    		// Fix select2 dropdowns in contact modal when it opens
+		    		$(document).on('shown.bs.modal', '.contact_modal', function() {
+		    			var $modal = $(this);
+		    			simplifyCustomerModalAdditionalFields($modal);
+		    			ensureQuickContactRawDataPanel();
+		    			hideQuickContactRawData();
+		    			syncQuickContactType($modal);
+		    			$modal.find('select.select2').each(function() {
+	    				var $select = $(this);
+	    				var $formGroup = $select.closest('.form-group');
+	    				var $inputGroup = $select.closest('.input-group');
+
+    				if ($select.data('select2')) {
+    					$select.select2('destroy');
+    				}
+
+    				$select.select2({
+    					dropdownParent: $formGroup.length ? $formGroup : $modal,
+    					width: '100%',
+    					dropdownAutoWidth: false
+    				});
+
+    				// Fix dropdown width when opened
+    				$select.on('select2:open', function() {
+    					setTimeout(function() {
+    						var $container = $select.next('.select2-container');
+    						var containerWidth = $container.outerWidth();
+    						// Find the dropdown that was just opened
+    						var $dropdown = $('.select2-container--open .select2-dropdown');
+    						$dropdown.css({
+    							'width': containerWidth + 'px',
+    							'min-width': containerWidth + 'px',
+    							'max-width': containerWidth + 'px'
+    						});
+    					}, 0);
+    				});
+    			});
+    		});
+
+
     		// Tax ID Lookup Variables - declared at top to avoid temporal dead zone
     		var taxLookupTimeout;
     		var lastLookedUpTaxId = '';
     		var companyData = null;
+    		var originalNoResults = null;
+    		var quickContactTaxLookupTimer = null;
+    		var quickContactLastSearchedTaxId = '';
     		
-    		window.customerSelect2Open = false;
-    		$('#customer_id').on('select2:open', function() {
-    			window.customerSelect2Open = true;
-    			console.log('[Select2] open -> customerSelect2Open:', window.customerSelect2Open);
-    			
+	    		window.UPLOADS_IMG_BASE = "{{ asset('uploads/img') }}";
+	    		function hideContactModalFieldByName($modal, fieldName) {
+	    			$modal.find('[name="' + fieldName + '"], [name="' + fieldName + '[]"]').each(function() {
+	    				var $field = $(this);
+	    				var $container = $field.closest('[class*="col-md-"], [class*="col-sm-"], [class*="col-lg-"]');
+	    				if ($container.length) {
+	    					$container.hide();
+	    				} else {
+	    					$field.closest('.form-group').hide();
+	    				}
+	    			});
+	    		}
+
+	    		function simplifyCustomerModalAdditionalFields($modal) {
+	    			if (! $modal.length) {
+	    				return;
+	    			}
+
+	    			var $moreDiv = $modal.find('#more_div');
+	    			if ($moreDiv.length) {
+	    				$moreDiv.removeClass('hide').show();
+	    			}
+
+	    			$modal.find('.more_btn').closest('[class*="col-"]').hide();
+	    			$modal.find('div.opening_balance, div.pay_term').hide();
+
+	    			hideContactModalFieldByName($modal, 'credit_limit');
+	    			hideContactModalFieldByName($modal, 'state');
+	    			hideContactModalFieldByName($modal, 'country');
+	    			hideContactModalFieldByName($modal, 'address_line_2');
+	    		}
+
+	    		function fillCompactCustomerModalFromCompanyData(data) {
+	    			if (!data) {
+	    				return;
+	    			}
+
+	    			var addressText = data.address || '';
+	    			var addressParts = extractAddressParts(addressText);
+	    			var companyName = data.companyNameTh || data.companyNameEn || '';
+
+	    			// Clean up broken/partial suffix text and always enforce "(สำนักงานใหญ่)" suffix.
+	    			if (companyName) {
+	    				companyName = companyName
+	    					.replace(/\s*\(สำนักงานใ[^)]*\)\s*$/u, '')
+	    					.replace(/\s*\(สำนักงานใ.*$/u, '')
+	    					.replace(/\s*\([^)]*$/u, '')
+	    					.replace(/\s{2,}/g, ' ')
+	    					.trim();
+
+	    				if (!/\(สำนักงานใหญ่\)\s*$/u.test(companyName)) {
+	    					companyName = companyName + ' (สำนักงานใหญ่)';
+	    				}
+	    			}
+
+	    			var rawCity = (data.city || '').trim();
+	    			var resolvedCity = rawCity || (addressParts.city || '').trim();
+	    			var resolvedState = (data.state || '').trim() || (addressParts.state || '').trim();
+	    			var resolvedZip = (data.zipCode || data.zip_code || '').toString().trim() || (addressParts.zipCode || '').trim();
+
+	    			// Normalize "city" to province-level for Bangkok and city strings that embed province text.
+	    			if (rawCity) {
+	    				if (/กรุงเทพ/.test(rawCity) || /(?:เขต|แขวง)/.test(rawCity)) {
+	    					resolvedCity = 'กรุงเทพมหานคร';
+	    				} else {
+	    					var provinceInCity = rawCity.match(/(?:จังหวัด|จ\.)\s*([ก-๙]+)/);
+	    					if (provinceInCity && provinceInCity[1]) {
+	    						resolvedCity = provinceInCity[1].trim();
+	    					}
+	    				}
+	    			}
+
+	    			if (!resolvedState && resolvedCity) {
+	    				resolvedState = resolvedCity;
+	    			}
+	    			if (!resolvedCity) {
+	    				resolvedCity = resolvedState;
+	    			}
+
+	    			var $modal = $('.contact_modal');
+	    			$modal.find('input[name="supplier_business_name"]').val(companyName);
+	    			$modal.find('input[name="first_name"]').val(companyName);
+	    			$modal.find('input[name="tax_number"]').val(data.taxNumber || '');
+	    			$modal.find('input[name="mobile"]').val(data.mobile || $modal.find('input[name="mobile"]').val() || '');
+	    			$modal.find('input[name="address_line_1"]').val(addressText);
+	    			$modal.find('input[name="city"]').val(resolvedCity);
+	    			$modal.find('input[name="state"]').val(resolvedState);
+	    			$modal.find('input[name="zip_code"]').val(resolvedZip);
+	    			$modal.find('input[name="country"]').val('Thailand');
+	    			$modal.find('input[name="shipping_address"]').val(addressText);
+	    		}
+
+	    		function syncQuickContactType($modal) {
+	    			var $typeSelect = $modal.find('#quick_contact_type');
+	    			if (! $typeSelect.length) {
+	    				return;
+	    			}
+
+	    			var selectedType = $typeSelect.val() || 'business';
+	    			$modal.find('input[name="contact_type_radio"]').val(selectedType);
+	    		}
+
+	    		function ensureQuickContactRawDataPanel() {
+	    			var $modal = $('.contact_modal');
+	    			if (! $modal.length) {
+	    				return null;
+	    			}
+
+	    			var $panel = $modal.find('#quick_contact_raw_data_panel');
+	    			if (! $panel.length) {
+	    				var panelHtml = ''
+	    					+ '<div id="quick_contact_raw_data_panel" class="panel panel-default" style="margin-top: 12px; display: none;">'
+	    					+ '  <div class="panel-heading" style="padding: 6px 10px;">'
+	    					+ '    <i class="fa fa-database"></i> <span id="quick_contact_raw_data_title">ข้อมูลจากการค้นหา</span>'
+	    					+ '    <button type="button" class="btn btn-xs btn-default pull-right" id="quick_contact_raw_data_toggle">ซ่อน</button>'
+	    					+ '  </div>'
+	    					+ '  <div class="panel-body" style="padding: 10px;">'
+	    					+ '    <div id="quick_contact_data_pretty"></div>'
+	    					+ '  </div>'
+	    					+ '</div>';
+	    				$modal.find('.modal-body').append(panelHtml);
+	    				$panel = $modal.find('#quick_contact_raw_data_panel');
+	    			}
+
+	    			return $panel;
+	    		}
+
+	    		function escapeQuickContactHtml(value) {
+	    			return String(value || '')
+	    				.replace(/&/g, '&amp;')
+	    				.replace(/</g, '&lt;')
+	    				.replace(/>/g, '&gt;')
+	    				.replace(/"/g, '&quot;')
+	    				.replace(/'/g, '&#39;');
+	    		}
+
+	    		function normalizeQuickContactDisplayData(rawData) {
+	    			var src = rawData || {};
+	    			return {
+	    				source: src._displaySource || '',
+	    				companyName: src.companyNameTh || src.companyNameEn || src.supplier_business_name || src.name || '',
+	    				taxNumber: src.taxNumber || src.tax_number || '',
+	    				address: src.address || src.address_line_1 || '',
+	    				city: src.city || '',
+	    				state: src.state || '',
+	    				zipCode: src.zipCode || src.zip_code || '',
+	    				mobile: src.mobile || src.phone || '',
+	    				email: src.email || ''
+	    			};
+	    		}
+
+	    		function buildQuickContactPrettyHtml(displayData) {
+	    			var fields = [
+	    				{ label: 'แหล่งข้อมูล', value: displayData.source },
+	    				{ label: 'ชื่อบริษัท', value: displayData.companyName },
+	    				{ label: 'เลขประจำตัวผู้เสียภาษี', value: displayData.taxNumber },
+	    				{ label: 'ที่อยู่', value: displayData.address },
+	    				{ label: 'เมือง', value: displayData.city },
+	    				{ label: 'จังหวัด', value: displayData.state },
+	    				{ label: 'รหัสไปรษณีย์', value: displayData.zipCode },
+	    				{ label: 'โทรศัพท์', value: displayData.mobile },
+	    				{ label: 'อีเมล์', value: displayData.email }
+	    			];
+
+	    			var rows = fields
+	    				.filter(function(field) {
+	    					return String(field.value || '').trim() !== '';
+	    				})
+	    				.map(function(field) {
+	    					return ''
+	    						+ '<tr>'
+	    						+ '  <th style="width: 220px; vertical-align: top; background: #f8f8f8;">' + escapeQuickContactHtml(field.label) + '</th>'
+	    						+ '  <td>' + escapeQuickContactHtml(field.value) + '</td>'
+	    						+ '</tr>';
+	    				})
+	    				.join('');
+
+	    			if (!rows) {
+	    				rows = '<tr><td>ไม่พบข้อมูล</td></tr>';
+	    			}
+
+	    			return ''
+	    				+ '<div class="table-responsive">'
+	    				+ '  <table class="table table-bordered table-condensed" style="margin-bottom: 0;">'
+	    				+ '    <tbody>' + rows + '</tbody>'
+	    				+ '  </table>'
+	    				+ '</div>';
+	    		}
+
+	    		function showQuickContactRawData(rawData, titleText) {
+	    			var $panel = ensureQuickContactRawDataPanel();
+	    			if (! $panel) {
+	    				return;
+	    			}
+
+	    			var safeTitle = titleText || 'ข้อมูลจากการค้นหา';
+	    			var displayData = normalizeQuickContactDisplayData(rawData);
+	    			var prettyHtml = buildQuickContactPrettyHtml(displayData);
+
+	    			$panel.find('#quick_contact_raw_data_title').text(safeTitle);
+	    			$panel.find('#quick_contact_data_pretty').html(prettyHtml);
+	    			$panel.show();
+	    		}
+
+	    		function hideQuickContactRawData() {
+	    			var $panel = $('.contact_modal').find('#quick_contact_raw_data_panel');
+	    			if ($panel.length) {
+	    				$panel.hide();
+	    			}
+	    		}
+
+	    		function showQuickContactTaxLookupAlert(type, message) {
+	    			var msg = message || '';
+	    			if (!msg) {
+	    				return;
+	    			}
+
+	    			if (window.Swal && typeof window.Swal.fire === 'function') {
+	    				window.Swal.fire({
+	    					toast: true,
+	    					position: 'top-end',
+	    					icon: type === 'success' ? 'success' : 'error',
+	    					title: msg,
+	    					showConfirmButton: false,
+	    					timer: 2500,
+	    					timerProgressBar: true
+	    				});
+	    				return;
+	    			}
+
+	    			if (typeof window.toastr !== 'undefined') {
+	    				toastr.options = $.extend({}, toastr.options || {}, {
+	    					positionClass: 'toast-top-right'
+	    				});
+	    				if (type === 'success') {
+	    					toastr.success(msg);
+	    				} else {
+	    					toastr.error(msg);
+	    				}
+	    				return;
+	    			}
+
+	    			if (typeof window.swal === 'function') {
+	    				window.swal(msg);
+	    			}
+	    		}
+	    		function hideBillingAddressBlock() {
+	    			var $billingBlock = $('#billing_address_block');
+	    			if ($billingBlock.length) {
+	    				$billingBlock.addClass('hide').hide();
+	    			}
+	    		}
+
+	    		hideBillingAddressBlock();
+	    		function ensureCustomerSelect2DropdownParent() {
+	    			var $customer = $('#customer_id');
+	    			if (!$customer.length || !$customer.data('select2')) {
+	    				return;
+	    			}
+
+	    			var existingOptions = $.extend(true, {}, $customer.data('select2').options.options || {});
+	    			existingOptions.dropdownParent = $customer.closest('.form-group');
+	    			existingOptions.width = '100%';
+	    			existingOptions.dropdownAutoWidth = false;
+
+	    			$customer.select2('destroy');
+	    			$customer.select2(existingOptions);
+	    		}
+
+	    		// Keep customer dropdown anchored within its form-group to avoid offset drift.
+	    		ensureCustomerSelect2DropdownParent();
+
+	    		window.customerSelect2Open = false;
+	    		$('#customer_id').on('select2:open', function() {
+	    			window.customerSelect2Open = true;
+	    			console.log('[Select2] open -> customerSelect2Open:', window.customerSelect2Open);
+
+	    			// Align dropdown to the full input-group width and position
+	    			setTimeout(function() {
+	    				var $inputGroup = $('#customer_id').closest('.input-group');
+	    				var width = $inputGroup.outerWidth();
+	    				var $dropdown = $('.select2-container--open .select2-dropdown').last();
+	    				$dropdown.css({
+	    					'left': '',
+	    					'right': '',
+	    					'width': width + 'px',
+	    					'min-width': width + 'px',
+	    					'max-width': width + 'px'
+	    				});
+	    			}, 0);
+
     			// Attach input listener to search field when dropdown opens
     			setTimeout(function() {
     				var $searchField = $('.select2-search__field');
@@ -1046,9 +1871,144 @@
     			window.customerSelect2Open = false;
     			console.log('[Select2] close -> customerSelect2Open:', window.customerSelect2Open);
     		});
-    		$(document).on('click', '.select2-selection__clear', function() {
-    			console.log('[Select2] clear (x) clicked. Dropdown open:', window.customerSelect2Open);
-    		});
+			function closeCustomerSelect2() {
+				var $customer = $('#customer_id');
+				if ($customer.length && $customer.data('select2')) {
+					$customer.select2('close');
+				}
+			}
+	    		$(document).on('click', '.select2-selection__clear', function() {
+	    			console.log('[Select2] clear (x) clicked. Dropdown open:', window.customerSelect2Open);
+	    		});
+
+	    		$(document).on('change', '#quick_contact_type', function() {
+	    			syncQuickContactType($('.contact_modal'));
+	    		});
+
+	    		$(document).on('click', '#quick_contact_raw_data_toggle', function() {
+	    			hideQuickContactRawData();
+	    		});
+
+	    		function mergeTaxLookupData(dbData, apiData) {
+	    			return {
+	    				companyNameTh: (apiData && apiData.companyNameTh) || (dbData && dbData.companyNameTh) || '',
+	    				companyNameEn: (apiData && apiData.companyNameEn) || (dbData && dbData.companyNameEn) || '',
+	    				taxNumber: (apiData && apiData.taxNumber) || (dbData && dbData.taxNumber) || '',
+	    				address: (apiData && apiData.address) || (dbData && dbData.address) || '',
+	    				mobile: (dbData && dbData.mobile) || (apiData && apiData.mobile) || '',
+	    				city: (apiData && apiData.city) || (dbData && dbData.city) || '',
+	    				state: (apiData && apiData.state) || (dbData && dbData.state) || '',
+	    				zipCode: (apiData && (apiData.zipCode || apiData.zip_code)) || (dbData && (dbData.zipCode || dbData.zip_code)) || '',
+	    				customerId: (dbData && dbData.customerId) || null,
+	    				_rawApi: (apiData && apiData.__raw) || null,
+	    				_rawDb: (dbData && dbData.__raw) || null
+	    			};
+	    		}
+
+	    		function runQuickContactTaxLookup(taxId, options) {
+	    			var opts = options || {};
+	    			var silent = !!opts.silent;
+	    			var force = !!opts.force;
+	    			var normalizedTaxId = (taxId || '').trim();
+	    			var $btn = $('#quick_contact_tax_lookup_btn');
+
+	    			if (!/^\d{13}$/.test(normalizedTaxId)) {
+	    				if (!silent) {
+	    					showQuickContactTaxLookupAlert('error', 'กรุณากรอกเลขประจำตัวผู้เสียภาษี 13 หลัก');
+	    				}
+	    				return;
+	    			}
+
+	    			if (!force && quickContactLastSearchedTaxId === normalizedTaxId) {
+	    				return;
+	    			}
+	    			quickContactLastSearchedTaxId = normalizedTaxId;
+
+	    			$btn.prop('disabled', true);
+
+	    			// DB first, then API for enrichment.
+	    			searchCustomerInDB(normalizedTaxId)
+	    				.then(function(dbData) {
+	    					if (dbData) {
+	    						fillCompactCustomerModalFromCompanyData(dbData);
+	    					}
+
+	    					return searchCompanyInAPI(normalizedTaxId).then(function(apiData) {
+	    						var mergedData = mergeTaxLookupData(dbData, apiData);
+	    						if (mergedData.companyNameTh || mergedData.taxNumber || mergedData.address) {
+	    							fillCompactCustomerModalFromCompanyData(mergedData);
+	    							mergedData._displaySource = dbData ? (apiData ? 'ฐานข้อมูล + API' : 'ฐานข้อมูล') : 'API';
+	    							showQuickContactRawData(mergedData, 'ข้อมูลจากการค้นหา');
+	    							if (!silent || force) {
+	    								showQuickContactTaxLookupAlert('success', 'ค้นหาข้อมูลสำเร็จ');
+	    							}
+	    						} else if (!silent || force) {
+	    							showQuickContactTaxLookupAlert('error', 'ไม่พบข้อมูลจากเลขประจำตัวผู้เสียภาษีนี้');
+	    						}
+	    					});
+	    				})
+	    				.catch(function() {
+	    					if (!silent || force) {
+	    						showQuickContactTaxLookupAlert('error', 'ค้นหาข้อมูลไม่สำเร็จ');
+	    					}
+	    				})
+	    				.finally(function() {
+	    					$btn.prop('disabled', false);
+	    				});
+	    		}
+
+	    		$(document).on('click', '#quick_contact_tax_lookup_btn', function(e) {
+	    			e.preventDefault();
+	    			runQuickContactTaxLookup($('#quick_contact_tax_number').val(), { force: true, silent: false });
+	    		});
+
+	    		$(document).on('input', '#quick_contact_tax_number', function() {
+	    			var taxId = ($(this).val() || '').trim();
+	    			if (!/^\d{13}$/.test(taxId)) {
+	    				return;
+	    			}
+
+	    			clearTimeout(quickContactTaxLookupTimer);
+	    			quickContactTaxLookupTimer = setTimeout(function() {
+	    				runQuickContactTaxLookup(taxId, { force: false, silent: true });
+	    			}, 250);
+	    		});
+
+	    		$('#customer_id').on('change select2:select select2:clear', function(e) {
+	    			hideBillingAddressBlock();
+
+	    			if (e && e.type === 'select2:select') {
+	    				var selectedData = (e.params && e.params.data) ? e.params.data : null;
+	    				var selectedText = selectedData && selectedData.text ? selectedData.text : $('#customer_id option:selected').text();
+	    				if (selectedText) {
+	    					showQuickContactTaxLookupAlert('success', 'เลือกลูกค้า: ' + selectedText);
+	    				}
+	    			}
+	    		});
+
+	    		$(document).on('click', '.toggle-section-btn', function() {
+	    			var $btn = $(this);
+	    			var target = $btn.data('target');
+	    			var $target = $(target);
+	    			if (!$target.length) {
+	    				return;
+	    			}
+
+	    			var showText = $btn.data('show-text') || 'แสดง';
+	    			var hideText = $btn.data('hide-text') || 'ซ่อน';
+	    			var $icon = $btn.find('i.fa');
+	    			var $text = $btn.find('.toggle-text');
+
+	    			if ($target.is(':visible')) {
+	    				$target.slideUp(180);
+	    				$icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+	    				$text.text(showText);
+	    			} else {
+	    				$target.slideDown(180);
+	    				$icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+	    				$text.text(hideText);
+	    			}
+	    		});
 
     		$('#status').change(function(){
     			var status = $(this).val();
@@ -1195,16 +2155,24 @@
 		    });
 
 		    $(document).on('change', '#prefer_payment_method', function(e) {
-			    var default_accounts = $('select#select_location_id').length ? 
+			    var default_accounts = $('select#select_location_id').length ?
 			                $('select#select_location_id')
 			                .find(':selected')
 			                .data('default_payment_accounts') : $('#location_id').data('default_payment_accounts');
+			    if (typeof default_accounts === 'string') {
+			        try {
+			            default_accounts = JSON.parse(default_accounts);
+			        } catch (e) {
+			            default_accounts = {};
+			        }
+			    }
+			    default_accounts = default_accounts || {};
 			    var payment_type = $(this).val();
 			    if (payment_type) {
-			        var default_account = default_accounts && default_accounts[payment_type]['account'] ? 
+			        var default_account = default_accounts[payment_type] && default_accounts[payment_type]['account'] ?
 			            default_accounts[payment_type]['account'] : '';
 			        var account_dropdown = $('select#prefer_payment_account');
-			        if (account_dropdown.length && default_accounts) {
+			        if (account_dropdown.length) {
 			            account_dropdown.val(default_account);
 			            account_dropdown.change();
 			        }
@@ -1541,16 +2509,20 @@
 							console.log('DB search response:', response);
 							if (response && response.success && response.data) {
 								// Convert DB format to match API format
-								const dbData = {
-									companyNameTh: response.data.supplier_business_name || response.data.name,
-									companyNameEn: response.data.supplier_business_name || response.data.name,
-									taxNumber: response.data.tax_number,
-									businessType: '',
-									address: response.data.address_line_1 || '',
-									mobile: response.data.mobile || '',
-									customerId: response.data.id, // Store customer ID for direct selection
-									isExisting: true
-								};
+									const dbData = {
+										companyNameTh: response.data.supplier_business_name || response.data.name,
+										companyNameEn: response.data.supplier_business_name || response.data.name,
+										taxNumber: response.data.tax_number,
+										businessType: '',
+										address: response.data.address_line_1 || '',
+										mobile: response.data.mobile || '',
+										city: response.data.city || '',
+										state: response.data.state || '',
+										zipCode: response.data.zip_code || '',
+										customerId: response.data.id, // Store customer ID for direct selection
+										isExisting: true,
+										__raw: response.data
+									};
 								resolve(dbData);
 							} else {
 								resolve(null); // Not found in DB
@@ -1579,12 +2551,13 @@
 						url: apiUrl,
 						method: 'GET',
 						timeout: 10000,
-						success: function(data) {
-							console.log('[DEBUG] API response received:', data);
-							if (data && data.companyNameTh) {
-								data.isExisting = false; // Mark as new customer
-								resolve(data);
-							} else {
+							success: function(data) {
+								console.log('[DEBUG] API response received:', data);
+								if (data && data.companyNameTh) {
+									data.__raw = $.extend(true, {}, data);
+									data.isExisting = false; // Mark as new customer
+									resolve(data);
+								} else {
 								console.log('[DEBUG] API response has no companyNameTh, resolving null');
 								resolve(null);
 							}
@@ -1604,82 +2577,18 @@
 
 			// Show tax lookup status functions
 			function showTaxLookupLoading() {
-				console.log('Showing loading status');
-				// Remove any existing status messages
 				$('.tax-lookup-status').remove();
-				
-				// Add loading indicator near the customer field
-				var statusHtml = '<div class="tax-lookup-status" style="margin-top: 5px; color: #007bff;"><i class="fa fa-spinner fa-spin"></i> Looking up Tax ID...</div>';
-				$('#customer_id').closest('.form-group').append(statusHtml);
 			}
 
 			function showTaxLookupSuccess(companyName, dataSource) {
 				console.log('Showing success status for:', companyName, 'Source:', dataSource);
-				
-				// Remove loading status and any previous tax-lookup panels
 				$('.tax-lookup-status').remove();
-				
-				// Determine the label based on data source
-				let statusLabel = '';
-				if (dataSource === 'existing') {
-					statusLabel = '(ลูกค้าเก่า)';
-				} else if (dataSource === 'new') {
-					statusLabel = '(ลูกค้าใหม่)';
-				}
-				
-				// Build button HTML based on data source
-				let buttonHtml = '';
-				if (dataSource === 'existing') {
-					buttonHtml = `
-						<button type="button" class="btn btn-success btn-sm tax-lookup-use-temp-btn" style="margin: 2px;">
-							<i class="fa fa-file"></i> Use for document
-						</button>
-						<button type="button" class="btn btn-warning btn-sm tax-lookup-edit-existing-btn" style="margin: 2px;">
-							<i class="fa fa-edit"></i> Edit this customer
-						</button>
-					`;
-				} else {
-					buttonHtml = `
-						<button type="button" class="btn btn-success btn-sm tax-lookup-use-btn" style="margin: 2px;">
-							<i class="fa fa-check"></i> Use for document
-						</button>
-						<button type="button" class="btn btn-primary btn-sm tax-lookup-add-btn" style="margin: 2px;">
-							<i class="fa fa-plus"></i> Add as customer
-						</button>
-					`;
-				}
-				
-				// Create status panel HTML - shown BELOW the customer dropdown, not inside it
-				const statusHtml = `
-					<div class="tax-lookup-status" style="margin-top: 100px; padding: 10px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 4px; position: relative; z-index: auto;">
-						<div style="margin-bottom: 8px; font-weight: bold; color: #2e7d32;">
-							<i class="fa fa-check-circle"></i>
-							Tax ID Found: ${companyName} ${statusLabel}
-						</div>
-						<div>
-							${buttonHtml}
-						</div>
-					</div>
-				`;
-				
-				// Append AFTER the customer Select2 container (not inside the dropdown)
-				$('#customer_id').closest('.form-group').append(statusHtml);
 			}
 
 
 			function showTaxLookupError(errorMsg) {
 				console.log('Showing error status:', errorMsg);
-				// Remove loading status
 				$('.tax-lookup-status').remove();
-				
-				// Add error message
-				var statusHtml = '<div class="tax-lookup-status" style="margin-top: 5px; color: #dc3545;"><i class="fa fa-exclamation-triangle"></i> ' + errorMsg + '</div>';
-				$('#customer_id').closest('.form-group').append(statusHtml);
-				
-				// Auto-hide error after 5 seconds
-				setTimeout(function() {
-					$('.tax-lookup-status').fadeOut();
-				}, 5000);
 				
 				companyData = null;
 			}
@@ -1792,7 +2701,7 @@
 							
 							// Hide the lookup status and close dropdown
 							hideTaxLookupStatus();
-							$('#customer_id').select2('close');
+							closeCustomerSelect2();
 							
 							toastr.success('Customer created successfully: ' + response.data.name);
 						} else {
@@ -1833,7 +2742,7 @@
 					console.log('Using existing customer data temporarily:', companyData);
 					
 					// Close the Select2 dropdown first
-					$('#customer_id').select2('close');
+					closeCustomerSelect2();
 					
 					// Remove any existing temp options first
 					$('#customer_id option[value^="temp_company_"]').remove();
@@ -1885,7 +2794,7 @@
 				
 				if (companyData && companyData.customerId) {
 					// Close the Select2 dropdown first
-					$('#customer_id').select2('close');
+					closeCustomerSelect2();
 					
 					console.log('Opening edit modal for existing customer:', companyData);
 					
@@ -1985,7 +2894,7 @@
 					console.log('Using company data:', companyData);
 					
 					// Close the Select2 dropdown first
-					$('#customer_id').select2('close');
+					closeCustomerSelect2();
 					
 					// Remove any existing temp options first
 					$('#customer_id option[value^="temp_company_"]').remove();
@@ -2023,6 +2932,8 @@
 			
 			// Helper function to update address displays
 			function updateAddressDisplays(companyData) {
+				hideBillingAddressBlock();
+
 				// Update billing address display if exists
 				var addressDisplay = $('#billing_address_div');
 				if (addressDisplay.length) {
@@ -2081,7 +2992,7 @@
 				console.log('Add company button clicked');
 				
 				// Close the Select2 dropdown first
-				$('#customer_id').select2('close');
+				closeCustomerSelect2();
 				
 				const dataSource = $(this).data('source') || 'new';
 				let companyData = null;
@@ -2268,7 +3179,7 @@
 
 			// Override the add_new_customer click handler to handle company data
 			$(document).off('click', '.add_new_customer').on('click', '.add_new_customer', function() {
-				$('#customer_id').select2('close');
+				closeCustomerSelect2();
 				var name = $(this).data('name');
 				var companyData = $(this).data('company-data');
 				
@@ -2325,6 +3236,94 @@
 				$('.contact_modal').modal('show');
 			});
 
+			// Edit selected customer from create page
+			$(document).on('click', '.edit_customer_btn', function(e) {
+				e.preventDefault();
+				closeCustomerSelect2();
+
+				var contactId = $('#customer_id').val();
+				if (!contactId) {
+					toastr.error('Please select a customer first');
+					return;
+				}
+
+				if (typeof contactId === 'string' && contactId.indexOf('temp_company_') === 0) {
+					toastr.error('Please save the customer first before editing');
+					return;
+				}
+
+				$('.contact_modal').modal('show');
+				$.ajax({
+					url: '/contacts/' + contactId + '/edit?compact=1',
+					type: 'GET',
+					success: function(response) {
+						$('.contact_modal .modal-content').html(response);
+
+						// Setup radio button change handler and default selection
+						setTimeout(function() {
+							simplifyCustomerModalAdditionalFields($('.contact_modal'));
+							var $radios = $('.contact_modal input[name="contact_type_radio"]');
+							var contactName = $('.contact_modal #hidden_contact_name').val() || '';
+
+							// Bind change event for individual/business toggle
+							$radios.off('change').on('change', function() {
+								if (this.value == 'individual') {
+									$('.contact_modal div.individual').show();
+									$('.contact_modal div.business').hide();
+
+									// Auto-populate first_name/last_name from contact name if empty
+									var $firstName = $('.contact_modal input[name="first_name"]');
+									var $lastName = $('.contact_modal input[name="last_name"]');
+
+									if (contactName && !$firstName.val() && !$lastName.val()) {
+										// Split Thai name: first word = first name, rest = last name
+										var nameParts = contactName.trim().split(/\s+/);
+										if (nameParts.length >= 2) {
+											$firstName.val(nameParts[0]);
+											$lastName.val(nameParts.slice(1).join(' '));
+										} else if (nameParts.length === 1) {
+											$firstName.val(nameParts[0]);
+										}
+										console.log('Auto-populated name from:', contactName, '-> First:', $firstName.val(), 'Last:', $lastName.val());
+									}
+								} else if (this.value == 'business') {
+									$('.contact_modal div.individual').hide();
+									$('.contact_modal div.business').show();
+								}
+							});
+
+							// If no contact_type radio is checked, default to 'individual'
+							if ($radios.length && !$radios.filter(':checked').length) {
+								$radios.filter('[value="individual"]').prop('checked', true);
+								$('.contact_modal div.individual').show();
+								$('.contact_modal div.business').hide();
+
+								// Also populate names for default individual selection
+								var $firstName = $('.contact_modal input[name="first_name"]');
+								var $lastName = $('.contact_modal input[name="last_name"]');
+
+								if (contactName && !$firstName.val() && !$lastName.val()) {
+									var nameParts = contactName.trim().split(/\s+/);
+									if (nameParts.length >= 2) {
+										$firstName.val(nameParts[0]);
+										$lastName.val(nameParts.slice(1).join(' '));
+									} else if (nameParts.length === 1) {
+										$firstName.val(nameParts[0]);
+									}
+								}
+							} else {
+								// Trigger change to show/hide correct fields based on current selection
+								$radios.filter(':checked').trigger('change');
+							}
+						}, 100);
+					},
+					error: function(xhr, status, error) {
+						console.error('Error loading customer edit form:', error);
+						toastr.error('Error loading customer edit form');
+					}
+				});
+			});
+
 			// Handle successful contact creation/update from modal
 			$(document).on('submit', '.contact_modal form', function(e) {
 				const isEditMode = window.pendingCompanyData && window.pendingCompanyData.isEditMode;
@@ -2338,8 +3337,15 @@
 
 			// Listen for AJAX success on contact form
 			$(document).ajaxSuccess(function(event, xhr, settings) {
-				// Check if this is a contact creation/update response
-				if (settings.url && (settings.url.includes('/contacts') || settings.url.endsWith('/contacts'))) {
+				// Only handle contact create/update responses (not search/details GET endpoints).
+				const requestMethod = (settings.type || 'GET').toUpperCase();
+				const requestUrl = settings.url || '';
+				const urlParser = document.createElement('a');
+				urlParser.href = requestUrl;
+				const requestPath = (urlParser.pathname || requestUrl).replace(/\/+$/, '');
+				const isContactCreateOrUpdatePath = /\/contacts(?:\/\d+)?$/.test(requestPath);
+
+				if (requestMethod !== 'GET' && isContactCreateOrUpdatePath) {
 					try {
 						const response = JSON.parse(xhr.responseText);
 						
@@ -2397,17 +3403,19 @@
 					zipCode: ''
 				};
 
-				if (!address) return parts;
+				if (!address) {
+					return parts;
+				}
 
 				console.log('Parsing Thai address:', address);
 
-				// Extract zip code (5 digits at the end)
-				const zipMatch = address.match(/(\d{5})$/);
+				const zipMatch = address.match(/(\d{5})(?!.*\d)/);
 				if (zipMatch) {
 					parts.zipCode = zipMatch[1];
 				}
 
-				// Common Thai provinces - comprehensive list
+				const addressWithoutZip = address.replace(/\s*\d{5}\s*$/, '').trim();
+
 				const thaiProvinces = [
 					'กรุงเทพมหานคร', 'กระบี่', 'กาญจนบุรี', 'กาฬสินธุ์', 'กำแพงเพชร', 'ขอนแก่น', 'จันทบุรี', 'ฉะเชิงเทรา',
 					'ชลบุรี', 'ชัยนาท', 'ชัยภูมิ', 'ชุมพร', 'เชียงราย', 'เชียงใหม่', 'ตรัง', 'ตราด', 'ตาก', 'นครนายก',
@@ -2420,55 +3428,75 @@
 					'หนองคาย', 'หนองบัวลำภู', 'อ่างทอง', 'อำนาจเจริญ', 'อุดรธานี', 'อุตรดิตถ์', 'อุทัยธานี', 'อุบลราชธานี'
 				];
 
-				// Remove zip code from address for better parsing
-				let addressWithoutZip = address.replace(/\s*\d{5}\s*$/, '').trim();
-				
-				// Method 1: Look for explicit province patterns
 				let provinceFound = '';
-				
-				// Check for "จ." or "จังหวัด" prefix
-				let provinceMatch = addressWithoutZip.match(/(?:จ\.|จังหวัด)\s*([ก-๙]+)/);
+				const provinceMatch = addressWithoutZip.match(/(?:จังหวัด|จ\.)\s*([ก-๙]+)/);
 				if (provinceMatch) {
 					provinceFound = provinceMatch[1].trim();
 				}
 
-				// Method 2: If no explicit pattern, search for known provinces in the address
 				if (!provinceFound) {
-					for (let province of thaiProvinces) {
-						if (addressWithoutZip.includes(province)) {
-							provinceFound = province;
+					for (let i = 0; i < thaiProvinces.length; i++) {
+						if (addressWithoutZip.includes(thaiProvinces[i])) {
+							provinceFound = thaiProvinces[i];
 							break;
 						}
 					}
 				}
 
-				// Method 3: If still not found, try to extract the last significant word before zip code
-				if (!provinceFound) {
-					// Split by spaces and look for the last meaningful word
-					const words = addressWithoutZip.split(/\s+/);
-					for (let i = words.length - 1; i >= 0; i--) {
-						const word = words[i].trim();
-						// Skip common non-province words
-						if (word && !word.match(/^(ถนน|ซอย|แขวง|เขต|อำเภอ|ตำบล|หมู่|ม\.|ต\.|อ\.)/) && word.length > 2) {
-							// Check if this word is a province
-							const matchedProvince = thaiProvinces.find(p => p.includes(word) || word.includes(p));
-							if (matchedProvince) {
-								provinceFound = matchedProvince;
-								break;
-							}
-						}
-					}
+				// Bangkok addresses often use เขต/แขวง without explicit province text.
+				if (!provinceFound && /(เขต|แขวง)/.test(addressWithoutZip)) {
+					provinceFound = 'กรุงเทพมหานคร';
 				}
 
-				// Set both city and state to the found province (Thai standard)
-				if (provinceFound) {
-					parts.city = provinceFound;
-					parts.state = provinceFound;
-				}
+				const districtMatch = addressWithoutZip.match(/(?:อำเภอ|อ\.|เขต)\s*([ก-๙]+)/);
+				const subDistrictMatch = addressWithoutZip.match(/(?:ตำบล|ต\.|แขวง)\s*([ก-๙]+)/);
+
+					if (districtMatch && districtMatch[1]) {
+						parts.city = districtMatch[1].trim();
+					} else if (subDistrictMatch && subDistrictMatch[1]) {
+						parts.city = subDistrictMatch[1].trim();
+					}
+
+					if (provinceFound) {
+						parts.state = provinceFound;
+					}
+
+					// For Bangkok, city should be province-level, not district/sub-district.
+					if (parts.state === 'กรุงเทพมหานคร') {
+						parts.city = 'กรุงเทพมหานคร';
+					}
+
+					// Final fallback: keep city non-empty when possible.
+					if (!parts.city && parts.state) {
+						parts.city = parts.state;
+					}
 
 				console.log('Extracted address parts:', parts);
 				return parts;
 			}
+
+				// Auto-fill from AI quotation plan
+				var aiQuotationItems = sessionStorage.getItem('ai_quotation_items');
+				if (aiQuotationItems) {
+					try {
+						var items = JSON.parse(aiQuotationItems);
+						if (Array.isArray(items) && items.length > 0) {
+							var delay = 100;
+							items.forEach(function(item) {
+								setTimeout(function() {
+									if (item.variation_id && item.quantity) {
+										pos_product_row(item.variation_id, null, null, item.quantity);
+									}
+								}, delay);
+								delay += 300;
+							});
+						}
+					} catch(e) {
+						console.error("Failed to parse AI quotation items", e);
+					}
+					// Clear it after using
+					sessionStorage.removeItem('ai_quotation_items');
+				}
 
     	});
     </script>

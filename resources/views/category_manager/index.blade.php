@@ -653,7 +653,7 @@ $(document).ready(function() {
         } else {
             // Give user feedback that new tab opened
             setTimeout(() => {
-                showAlert(`✅ Product creation page opened in new tab for "${category.name}"`, 'info');
+                showAlert(` Product creation page opened in new tab for "${category.name}"`, 'info');
             }, 1000);
         }
     }

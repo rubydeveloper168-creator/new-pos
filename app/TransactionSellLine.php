@@ -108,4 +108,9 @@ class TransactionSellLine extends Model
     {
         return $this->belongsTo(\App\TransactionSellLine::class, 'so_line_id');
     }
+
+    public function warranty_service_cycles()
+    {
+        return $this->hasMany(\App\WarrantyServiceCycle::class, 'sell_line_id');
+    }
 }

@@ -523,6 +523,23 @@ $(document).ready(function() {
             if (this.value == 'individual') {
                 $('div.individual').show();
                 $('div.business').hide();
+
+                // Auto-populate first_name/last_name from contact name if empty
+                var contactName = $('.contact_modal #hidden_contact_name').val() || '';
+                var $firstName = $('.contact_modal input[name="first_name"]');
+                var $lastName = $('.contact_modal input[name="last_name"]');
+
+                if (contactName && !$firstName.val() && !$lastName.val()) {
+                    // Split name: first word = first name, rest = last name
+                    var nameParts = contactName.trim().split(/\s+/);
+                    if (nameParts.length >= 2) {
+                        $firstName.val(nameParts[0]);
+                        $lastName.val(nameParts.slice(1).join(' '));
+                    } else if (nameParts.length === 1) {
+                        $firstName.val(nameParts[0]);
+                    }
+                    console.log('Auto-populated name from:', contactName, '-> First:', $firstName.val(), 'Last:', $lastName.val());
+                }
             } else if (this.value == 'business') {
                 $('div.individual').hide();
                 $('div.business').show();
@@ -2219,16 +2236,47 @@ function get_sub_units() {
         });
     }
 }
+function send_client_log(message, context) {
+    try {
+        $.ajax({
+            method: 'POST',
+            url: '/logs/text',
+            dataType: 'json',
+            data: {
+                message: message,
+                context: context || {},
+                url: window.location.href
+            }
+        });
+    } catch (e) {
+        // no-op
+    }
+}
+window.sendClientLog = send_client_log;
 function show_product_type_form() {
 
     //Disable Stock management & Woocommmerce sync if type combo
+    var action = $('#type').attr('data-action');
     if($('#type').val() == 'combo'){
-        $('#enable_stock').iCheck('uncheck');
+        if (action === 'add') {
+            $('#enable_stock').iCheck('uncheck');
+        }
         $('input[name="woocommerce_disable_sync"]').iCheck('check');
     }
     
-    var action = $('#type').attr('data-action');
     var product_id = $('#type').attr('data-product_id');
+    console.log('[product] load type form', {
+        action: action,
+        product_id: product_id,
+        type: $('#type').val()
+    });
+    if (typeof window.sendClientLog === 'function') {
+        window.sendClientLog('product type form load', {
+            action: action,
+            product_id: product_id,
+            type: $('#type').val()
+        });
+    }
     $.ajax({
         method: 'POST',
         url: '/products/product_form_part',
@@ -2236,10 +2284,32 @@ function show_product_type_form() {
         data: { type: $('#type').val(), product_id: product_id, action: action },
         success: function(result) {
             if (result) {
+                console.log('[product] type form loaded', {
+                    type: $('#type').val(),
+                    html_length: result.length
+                });
+                if (typeof window.sendClientLog === 'function') {
+                    window.sendClientLog('product type form loaded', {
+                        type: $('#type').val(),
+                        html_length: result.length
+                    });
+                }
                 $('#product_form_part').html(result);
                 toggle_dsp_input();
             }
         },
+        error: function(xhr) {
+            console.log('[product] type form load failed', {
+                status: xhr.status,
+                responseText: xhr.responseText
+            });
+            if (typeof window.sendClientLog === 'function') {
+                window.sendClientLog('product type form load failed', {
+                    status: xhr.status,
+                    responseText: xhr.responseText
+                });
+            }
+        }
     });
 }
 

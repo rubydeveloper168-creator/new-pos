@@ -1713,7 +1713,8 @@ class ProductUtil extends Util
                 'products.image',
                 'variations.id as variation_id',
                 'variations.name as variation',
-                'VLD.qty_available',
+                DB::raw('COALESCE(VLD.qty_available, 0) as qty_available'),
+                'VLD.location_id as stock_location_id',
                 'variations.sell_price_inc_tax as selling_price',
                 'variations.sub_sku',
                 'U.short_name as unit'
@@ -1729,7 +1730,7 @@ class ProductUtil extends Util
 
         $query->groupBy('variations.id');
 
-        return $query->orderBy('VLD.qty_available', 'desc')
+        return $query->orderByRaw('COALESCE(VLD.qty_available, 0) DESC')
                         ->get();
     }
 
@@ -1887,6 +1888,13 @@ class ProductUtil extends Util
      */
     public function __getComboProductDetails($combo_variations, $business_id)
     {
+        if (empty($combo_variations)) {
+            return [];
+        }
+        if (is_string($combo_variations)) {
+            $decoded = json_decode($combo_variations, true);
+            $combo_variations = is_array($decoded) ? $decoded : [];
+        }
         foreach ($combo_variations as $key => $value) {
             $combo_variations[$key]['variation'] =
                 Variation::with(['product'])

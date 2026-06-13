@@ -283,4 +283,24 @@ class Product extends Model
     {
         return $this->hasMany(\App\ProductRack::class);
     }
+
+    /**
+     * Get the group types for this product.
+     */
+    public function groupTypes()
+    {
+        return $this->belongsToMany(\App\GroupType::class, 'group_type_products')
+                    ->withPivot('sort_order')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Get the group sub types for this product.
+     */
+    public function groupSubTypes()
+    {
+        return $this->belongsToMany(\App\GroupSubType::class, 'group_sub_type_products')
+                    ->withPivot('sort_order')
+                    ->withTimestamps();
+    }
 }

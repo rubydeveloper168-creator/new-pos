@@ -571,7 +571,16 @@ class Util
     {
         $unit = Unit::where('business_id', $business_id)
             ->with(['sub_units'])
-            ->findOrFail($unit_id);
+            ->find($unit_id);
+
+        if (empty($unit)) {
+            \Log::warning('getSubUnits: unit not found', [
+                'business_id' => $business_id,
+                'unit_id' => $unit_id,
+                'product_id' => $product_id,
+            ]);
+            return [];
+        }
 
         //Find related subunits for the product.
         $related_sub_units = [];

@@ -643,7 +643,7 @@
                 </div>
                 <div class="modal-footer" style="background-color: #f8f9fa; border-top: 1px solid #e9ecef; border-radius: 0 0 12px 12px; padding: 25px; display: flex; justify-content: center;">
                     <button type="button" class="btn btn-danger" data-dismiss="modal" style="padding: 12px 35px; border-radius: 6px; font-size: 16px; background-color: #000; border-color: #dc3545; font-weight: 500;">
-                    ❌ Cancel
+                    Cancel
                     </button>
                 </div>
             </div>
@@ -781,7 +781,8 @@
             summary_sales_table = $('#summary_sales_table').DataTable({
                 processing: false,
                 serverSide: true,
-                aaSorting: [[1, 'desc']],
+                // Default to latest transaction time to avoid mixed invoice-number ordering.
+                aaSorting: [[0, 'desc']],
                 "ajax": {
                     "url": "{{ route('sells.summary-sales-data') }}",
                     "data": function(d) {

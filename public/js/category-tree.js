@@ -423,8 +423,8 @@ $(document).ready(function() {
             let currentStock = product.current_stock || product.stock || 0;
             const stockClass = currentStock > 0 ? 'in-stock' : 'out-of-stock';
             const stockText = currentStock > 0 ? 
-                '✅ In Stock (' + currentStock + ')' : 
-                '❌ Out of Stock';
+                ' In Stock (' + currentStock + ')' : 
+                'Out of Stock';
             
             // Handle image URL
             const imageHtml = product.image ? 

@@ -53,6 +53,39 @@ class ProductController extends Controller
         //barcode types
         $this->barcode_types = $this->productUtil->barcode_types();
     }
+    
+    /**
+     * Append client-side logs to storage/logs/logs.text
+     */
+    public function clientLog(Request $request)
+    {
+        $message = (string) $request->input('message', '');
+        $context = $request->input('context', null);
+
+        if ($message === '' && empty($context)) {
+            return response()->json(['ok' => false, 'error' => 'empty'], 400);
+        }
+
+        $payload = [
+            'ts' => now()->format('Y-m-d H:i:s'),
+            'user_id' => optional(auth()->user())->id,
+            'ip' => $request->ip(),
+            'url' => $request->input('url', $request->fullUrl()),
+            'message' => $message,
+            'context' => $context,
+        ];
+
+        $logDir = storage_path('logs');
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+
+        $logPath = $logDir . DIRECTORY_SEPARATOR . 'logs.text';
+        $line = json_encode($payload, JSON_UNESCAPED_SLASHES) . PHP_EOL;
+        file_put_contents($logPath, $line, FILE_APPEND | LOCK_EX);
+
+        return response()->json(['ok' => true]);
+    }
 
     /**
      * Display a listing of the resource.
@@ -61,6 +94,8 @@ class ProductController extends Controller
      */
     public function index()
     {
+        return redirect('products-v2');
+
         if (! auth()->user()->can('product.view') && ! auth()->user()->can('product.create')) {
             abort(403, 'Unauthorized action.');
         }
@@ -351,35 +386,6 @@ class ProductController extends Controller
                     }, ])
                 ->rawColumns(['action', 'image', 'mass_delete', 'product', 'selling_price', 'purchase_price', 'category', 'current_stock']);
 
-            // Add summary data for enhanced filtering
-            if (! empty(request()->get('enhanced_search')) || 
-                ! empty(request()->get('enhanced_category')) ||
-                ! empty(request()->get('min_price')) || 
-                ! empty(request()->get('max_price')) || 
-                ! empty(request()->get('stock_status'))) {
-                
-                // Get the response data
-                $response = $dataTable->make(true);
-                $responseData = $response->getData();
-                
-                // Calculate summary statistics
-                $totalQuery = clone $products;
-                $inStockQuery = clone $products;
-                $inStockQuery->havingRaw('SUM(vld.qty_available) > 0');
-                
-                $summary = [
-                    'in_stock_count' => $inStockQuery->count(),
-                    'total_value' => $totalQuery->get()->sum(function($item) {
-                        return ($item->current_stock ?? 0) * ($item->max_price ?? 0);
-                    })
-                ];
-                
-                // Add summary to the response
-                $responseData->summary = $summary;
-                
-                return response()->json($responseData);
-            }
-
             return $dataTable->make(true);
         }
 
@@ -547,7 +553,7 @@ class ProductController extends Controller
         }
         try {
             $business_id = $request->session()->get('user.business_id');
-            $form_fields = ['name', 'brand_id', 'unit_id', 'category_id', 'tax', 'type', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'category_l1_id', 'category_l2_id', 'category_l3_id', 'category_l4_id', 'category_l5_id', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20',];
+            $form_fields = ['name', 'second_name', 'brand_id', 'unit_id', 'category_id', 'tax', 'type', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'category_l1_id', 'category_l2_id', 'category_l3_id', 'category_l4_id', 'category_l5_id', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20',];
 
             $module_form_fields = $this->moduleUtil->getModuleFormField('product_form_fields');
             if (! empty($module_form_fields)) {
@@ -620,6 +626,24 @@ class ProductController extends Controller
 
             $product = Product::create($product_details);
 
+            \Log::info('Product store - Base product created', [
+                'product_id' => $product->id,
+                'type' => $product->type,
+                'sku' => $product->sku,
+                'name' => $product->name,
+                'second_name' => $product->second_name ?? null,
+                'category_id' => $product->category_id,
+                'category_l1_id' => $product->category_l1_id ?? null,
+                'category_l2_id' => $product->category_l2_id ?? null,
+                'category_l3_id' => $product->category_l3_id ?? null,
+                'category_l4_id' => $product->category_l4_id ?? null,
+                'category_l5_id' => $product->category_l5_id ?? null,
+                'request_type' => $request->input('type'),
+                'combo_variation_ids' => $request->input('composition_variation_id', []),
+                'combo_quantities' => $request->input('quantity', []),
+                'combo_units' => $request->input('unit', []),
+            ]);
+
             event(new ProductsCreatedOrModified($product_details, 'added'));
 
             if (empty(trim($request->input('sku')))) {
@@ -663,6 +687,12 @@ class ProductController extends Controller
                 $this->productUtil->createSingleProductVariation($product->id, $product->sku, $request->input('item_level_purchase_price_total'), $request->input('purchase_price_inc_tax'), $request->input('profit_percent'), $request->input('selling_price'), $request->input('selling_price_inc_tax'), $combo_variations);
             }
 
+            \Log::info('Product store - Variations created', [
+                'product_id' => $product->id,
+                'type' => $product->type,
+                'combo_variations_count' => isset($combo_variations) ? count($combo_variations) : 0,
+            ]);
+
             //Add product racks details.
             $product_racks = $request->get('product_racks', null);
             if (! empty($product_racks)) {
@@ -688,7 +718,7 @@ class ProductController extends Controller
                 'msg' => __('messages.something_went_wrong'),
             ];
 
-            return redirect('products-v2')->with('status', $output);
+            return redirect('products')->with('status', $output);
         }
 
         if ($request->input('submit_type') == 'submit_n_add_opening_stock') {
@@ -704,7 +734,7 @@ class ProductController extends Controller
             )->with('status', $output);
         }
 
-        return redirect('products-v2')->with('status', $output);
+        return redirect('products')->with('status', $output);
     }
 
     /**
@@ -808,6 +838,22 @@ class ProductController extends Controller
                             ->where('id', $id)
                             ->firstOrFail();
 
+        $variation_snapshot = ProductVariation::where('product_id', $product->id)
+            ->with(['variations'])
+            ->first();
+
+        \Log::info('Product edit - Loaded product', [
+            'product_id' => $product->id,
+            'type' => $product->type,
+            'sku' => $product->sku,
+            'name' => $product->name,
+            'second_name' => $product->second_name ?? null,
+            'combo_variations_raw' => $variation_snapshot && $variation_snapshot->variations->count() > 0
+                ? $variation_snapshot->variations->first()->combo_variations
+                : null,
+            'variations_count' => $variation_snapshot ? $variation_snapshot->variations->count() : 0,
+        ]);
+
         // Get hierarchical categories for dropdown (like in create form)
         $categories_hierarchical = Category::where('business_id', $business_id)
                         ->where('category_type', 'product')
@@ -887,7 +933,7 @@ class ProductController extends Controller
 
         try {
             $business_id = $request->session()->get('user.business_id');
-            $product_details = $request->only(['name', 'brand_id', 'unit_id', 'category_id', 'tax', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20', 'category_l1_id', 'category_l2_id', 'category_l3_id', 'category_l4_id', 'category_l5_id']);
+            $product_details = $request->only(['name', 'second_name', 'brand_id', 'unit_id', 'category_id', 'tax', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20', 'category_l1_id', 'category_l2_id', 'category_l3_id', 'category_l4_id', 'category_l5_id', 'type']);
 
             \Log::info('Product update - Raw request data:', [
                 'product_id' => $id,
@@ -935,6 +981,10 @@ class ProductController extends Controller
             }
 
             $product->name = $product_details['name'];
+            $product->second_name = $product_details['second_name'] ?? null;
+            if (!empty($product_details['type'])) {
+                $product->type = $product_details['type'];
+            }
             $product->brand_id = $product_details['brand_id'];
             $product->unit_id = $product_details['unit_id'];
             $product->category_id = $product_details['category_id'];
@@ -986,6 +1036,16 @@ class ProductController extends Controller
                 'category_l3_id' => $product->category_l3_id,
                 'category_l4_id' => $product->category_l4_id,
                 'category_l5_id' => $product->category_l5_id,
+            ]);
+
+            \Log::info('Product update - Incoming data', [
+                'product_id' => $id,
+                'type' => $request->input('type'),
+                'sku' => $product_details['sku'] ?? null,
+                'second_name' => $product_details['second_name'] ?? null,
+                'combo_variation_ids' => $request->input('composition_variation_id', []),
+                'combo_quantities' => $request->input('quantity', []),
+                'combo_units' => $request->input('unit', []),
             ]);
             
             // Ensure consistency between old and new category systems
@@ -1234,7 +1294,7 @@ class ProductController extends Controller
             )->with('status', $output);
         }
 
-        return redirect('products-v2')->with('status', $output);
+        return redirect('products')->with('status', $output);
     }
 
     /**
@@ -1428,14 +1488,25 @@ class ProductController extends Controller
                 $product_deatails = ProductVariation::where('product_id', $product_id)
                     ->with(['variations', 'variations.media'])
                     ->first();
-                $combo_variations = $this->productUtil->__getComboProductDetails($product_deatails['variations'][0]->combo_variations, $business_id);
 
-                $variation_id = $product_deatails['variations'][0]->id;
-                $profit_percent = $product_deatails['variations'][0]->profit_percent;
-                $default_purchase_price = $product_deatails['variations'][0]->default_purchase_price ?? 0;
-                $default_purchase_price_inc_tax = $product_deatails['variations'][0]->dpp_inc_tax ?? 0;
-                $default_selling_price = $product_deatails['variations'][0]->default_sell_price ?? 0;
-                $default_selling_price_inc_tax = $product_deatails['variations'][0]->sell_price_inc_tax ?? 0;
+                $combo_variations = [];
+                $variation_id = null;
+                $default_purchase_price = 0;
+                $default_purchase_price_inc_tax = 0;
+                $default_selling_price = 0;
+                $default_selling_price_inc_tax = 0;
+
+                if (!empty($product_deatails) && !empty($product_deatails->variations) && $product_deatails->variations->count() > 0) {
+                    $first_variation = $product_deatails->variations->first();
+                    $combo_variations = $this->productUtil->__getComboProductDetails($first_variation->combo_variations, $business_id);
+
+                    $variation_id = $first_variation->id;
+                    $profit_percent = $first_variation->profit_percent;
+                    $default_purchase_price = $first_variation->default_purchase_price ?? 0;
+                    $default_purchase_price_inc_tax = $first_variation->dpp_inc_tax ?? 0;
+                    $default_selling_price = $first_variation->default_sell_price ?? 0;
+                    $default_selling_price_inc_tax = $first_variation->sell_price_inc_tax ?? 0;
+                }
 
                 return view('product.partials.combo_product_form_part')
                 ->with(compact(
@@ -1554,7 +1625,8 @@ class ProductController extends Controller
                 }
                 $variations = $query->get();
 
-                $sub_units = $this->productUtil->getSubUnits($business_id, $product['unit']->id);
+                $unit_id = $product && $product->unit ? $product->unit->id : null;
+                $sub_units = $unit_id ? $this->productUtil->getSubUnits($business_id, $unit_id) : [];
 
                 return view('product.partials.combo_product_entry_row')
                 ->with(compact('product', 'variations', 'sub_units'));
@@ -1587,6 +1659,59 @@ class ProductController extends Controller
             }
 
             $result = $this->productUtil->filterProduct($business_id, $search_term, $location_id, $not_for_selling, $price_group_id, $product_types, $search_fields, $check_qty);
+
+            if (request()->boolean('debug_stock', false)) {
+                $resultCollection = collect($result);
+                $variationIds = $resultCollection->pluck('variation_id')
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                $stockByVariation = collect();
+                if ($variationIds->isNotEmpty()) {
+                    $stockByVariation = DB::table('variation_location_details')
+                        ->whereIn('variation_id', $variationIds)
+                        ->get(['variation_id', 'location_id', 'qty_available'])
+                        ->groupBy('variation_id');
+                }
+
+                $sample = $resultCollection->take(20)->map(function ($item) use ($location_id, $stockByVariation) {
+                    $qtyRaw = $item->qty_available ?? null;
+                    $qtyParsed = is_null($qtyRaw) ? null : (float) $qtyRaw;
+                    $variationStockRows = $stockByVariation->get($item->variation_id, collect())
+                        ->map(function ($row) {
+                            return [
+                                'location_id' => $row->location_id,
+                                'qty_available' => $row->qty_available,
+                            ];
+                        })
+                        ->values()
+                        ->toArray();
+
+                    return [
+                        'variation_id' => $item->variation_id ?? null,
+                        'product_id' => $item->product_id ?? null,
+                        'sku' => $item->sub_sku ?? null,
+                        'name' => $item->name ?? null,
+                        'search_location_id' => $location_id,
+                        'enable_stock' => $item->enable_stock ?? null,
+                        'qty_available_raw_from_query' => $qtyRaw,
+                        'qty_available_parsed' => $qtyParsed,
+                        'qty_is_null_from_query' => is_null($qtyRaw),
+                        'all_variation_location_rows' => $variationStockRows,
+                    ];
+                })->values()->toArray();
+
+                \Log::info('POS_STOCK_DEBUG', [
+                    'business_id' => $business_id,
+                    'search_term' => $search_term,
+                    'location_id' => $location_id,
+                    'price_group_id' => $price_group_id,
+                    'search_fields' => $search_fields,
+                    'result_count' => $resultCollection->count(),
+                    'sample' => $sample,
+                ]);
+            }
 
             return json_encode($result);
         }
@@ -1655,6 +1780,17 @@ class ProductController extends Controller
         $business_id = $request->session()->get('user.business_id');
         $sku = $request->input('sku');
         $product_id = $request->input('product_id');
+
+        if (! empty($product_id) && ! empty($sku)) {
+            $same_product = Product::where('business_id', $business_id)
+                            ->where('id', $product_id)
+                            ->where('sku', $sku)
+                            ->exists();
+            if ($same_product) {
+                echo 'true';
+                exit;
+            }
+        }
 
         //check in products table
         $query = Product::where('business_id', $business_id)

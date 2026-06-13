@@ -92,6 +92,10 @@
 @stop
 
 @section('javascript')
+	<script>
+		window.UPLOADS_IMG_BASE = @json(asset('uploads/img'));
+		window.NO_IMAGE_URL = @json(asset('uploads/img/no_image.png'));
+	</script>
 	<script src="{{ asset('js/pos.js?v=' . $asset_v) }}"></script>
 	<script src="{{ asset('js/printer.js?v=' . $asset_v) }}"></script>
 	<script src="{{ asset('js/product.js?v=' . $asset_v) }}"></script>

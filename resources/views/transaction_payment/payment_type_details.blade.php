@@ -78,7 +78,7 @@
 		</div>
 	</div>
 	<div class="col-md-2">
-		<div class="form-group">
+		<!-- <div class="form-group">
 			{!! Form::label('bank_logo_preview', 'โลโก้') !!}
 			<div class="bank-logo-preview" style="height:40px; display:flex; align-items:center;">
 				@if(!empty($payment_line->bank_logo))
@@ -87,7 +87,7 @@
 			</div>
 			{!! Form::hidden('bank_logo', $payment_line->bank_logo ?? null, ['class' => 'bank-logo-input']) !!}
 			<small class="help-block">เลือกธนาคารเพื่อผูกโลโก้อัตโนมัติ</small>
-		</div>
+		</div> -->
 	</div>
 </div>
 

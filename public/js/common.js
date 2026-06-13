@@ -365,10 +365,11 @@ $(document).on('keypress', 'input.input_number', function (event) {
     }
 });
 
-//Select all input values on click
-$(document).on('click', 'input', function (event) {
-    $(this).select();
-});
+//Select all input values on click - DISABLED for normal browser behavior
+//Users can manually select text by clicking and dragging
+// $(document).on('click', 'input', function (event) {
+//     $(this).select();
+// });
 
 $(document).on('click', '.toggle-font-size', function (event) {
     localStorage.setItem('upos_font_size', $(this).data('size'));
@@ -632,35 +633,4 @@ function copyToClipboard(element_id) {
     toastr.success(LANG.copied_to_clipboard);
 }
 
-$(document).on('show.bs.modal', '.view_modal', function() {
-    var $content = $(this).find('.modal-content');
-    if (!$content.length) {
-        return;
-    }
 
-    $content.removeClass('modal-loading-ready').addClass('modal-loading');
-    $content.find('.modal-loader-overlay').remove();
-
-    var $overlay = $('<div class="modal-loader-overlay"><div class="loader"></div></div>');
-    $content.append($overlay);
-
-    clearTimeout($content.data('modalLoaderTimeout'));
-    var timeoutId = setTimeout(function() {
-        $overlay.addClass('hidden');
-        setTimeout(function() {
-            $overlay.remove();
-        }, 300);
-        $content.removeClass('modal-loading').addClass('modal-loading-ready');
-    }, 2000);
-    $content.data('modalLoaderTimeout', timeoutId);
-});
-
-$(document).on('hidden.bs.modal', '.view_modal', function() {
-    var $content = $(this).find('.modal-content');
-    if (!$content.length) {
-        return;
-    }
-    clearTimeout($content.data('modalLoaderTimeout'));
-    $content.find('.modal-loader-overlay').remove();
-    $content.removeClass('modal-loading').removeClass('modal-loading-ready');
-});

@@ -6,10 +6,105 @@
 @section('title', $title)
 
 @section('content')
-
+<style>
+.select2-search__field {
+    background-color: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+.select2-search--dropdown .select2-search__field {
+    background-color: white !important;
+    color: black !important;
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+}
+.select2-container--open,
+.select2-dropdown {
+    z-index: 9999 !important;
+}
+#customer_id + .select2-container {
+    flex: 1 1 auto;
+    width: 100% !important;
+}
+.input-group .select2-container .select2-selection {
+    width: 100% !important;
+}
+.contact_due_text {
+    display: none !important;
+}
+.content-header h1 {
+    display: none;
+}
+.content {
+    background: #e9e9e9;
+    padding: 10px 15px;
+}
+#edit_sell_form .box.box-solid {
+    border: 1px solid #cfcfcf;
+    box-shadow: none;
+    background: #e9e9e9;
+}
+#edit_sell_form .box.box-solid > .box-body {
+    background: #e9e9e9;
+    padding: 14px;
+}
+#edit_sell_form .form-control {
+    border: 1px solid #bfc3c7;
+    border-radius: 0;
+    box-shadow: none;
+    height: 31px;
+}
+#edit_sell_form textarea.form-control {
+    height: auto;
+}
+#edit_sell_form label {
+    font-weight: 700;
+    color: #333;
+}
+.legacy-sale-title {
+    border: 1px solid #cfcfcf;
+    background: #efefef;
+    margin: -14px -14px 0 -14px;
+    padding: 9px 14px;
+}
+.legacy-sale-title h3 {
+    margin: 0;
+    color: #3c8dbc;
+    font-size: 28px;
+    font-weight: 700;
+}
+.legacy-sale-intro {
+    margin: 0 -14px 14px -14px;
+    padding: 10px 14px;
+    border: 1px solid #cfcfcf;
+    border-top: 0;
+    background: #efefef;
+    color: #333;
+}
+.legacy-warning-strip {
+    border: 1px solid #e9ddb6;
+    background: #f7f1df;
+    color: #7a6326;
+    font-weight: 700;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+}
+#pos_table thead th {
+    background: #428bca !important;
+    color: #fff !important;
+    border-color: #3f83ba !important;
+    font-weight: 700;
+}
+#edit_sell_form .table-bordered > thead > tr > th,
+#edit_sell_form .table-bordered > tbody > tr > td {
+    border-color: #cfd3d6;
+}
+</style>
 <!-- Content Header (Page header) -->
 <section class="content-header">
-    <h1>{{$title}} <small>(@if($transaction->type == 'sales_order') @lang('restaurant.order_no') @else @lang('sale.invoice_no') @endif: <span class="text-success">#{{$transaction->invoice_no}}</span>)</small></h1>
+    <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">{{$title}} <small class="tw-text-sm md:tw-text-base tw-text-gray-700 tw-font-semibold">(@if($transaction->type == 'sales_order') @lang('restaurant.order_no') @else @lang('sale.invoice_no') @endif: <span class="text-success">#{{$transaction->invoice_no}})</span></small></h1>
 </section>
 <!-- Main content -->
 <section class="content">
@@ -35,8 +130,15 @@
 	@endif
 	<div class="row">
 		<div class="col-md-12 col-sm-12">
-			<div class="box box-solid">
-			    <div class="box-body">
+			@component('components.widget', ['class' => 'box-solid'])
+				<div class="legacy-sale-title">
+					<h3><i class="fa-fw fa fa-pencil"></i> {{ $title }}</h3>
+				</div>
+				<div class="legacy-sale-intro">กรุณากรอกข้อมูลด้านล่าง</div>
+				<div class="col-sm-12">
+					<div class="legacy-warning-strip">กรุณาเลือกสิ่งเหล่านี้ก่อนเพิ่มสินค้า</div>
+				</div>
+
 				@if(!empty($transaction->selling_price_group_id))
 					<div class="col-md-4 col-sm-6">
 						<div class="form-group">
@@ -45,7 +147,7 @@
 									<i class="fas fa-money-bill-alt"></i>
 								</span>
 								{!! Form::hidden('price_group', $transaction->selling_price_group_id, ['id' => 'price_group']) !!}
-								{!! Form::text('price_group_text', $transaction->price_group->name, ['class' => 'form-control', 'readonly']); !!}
+								{!! Form::select('price_group_text', [$transaction->selling_price_group_id => $transaction->price_group->name], $transaction->selling_price_group_id, ['class' => 'form-control', 'disabled']); !!}
 								<span class="input-group-addon">
 									@show_tooltip(__('lang_v1.price_group_help_text'))
 								</span> 
@@ -89,96 +191,7 @@
 					</div>
 				@endif
 				<div class="clearfix"></div>
-				<div class="@if(!empty($commission_agent)) col-sm-3 @else col-sm-4 @endif">
-					<div class="form-group">
-						{!! Form::label('contact_id', __('contact.customer') . ':*') !!}
-						<div class="input-group">
-							<span class="input-group-addon">
-								<i class="fa fa-user"></i>
-							</span>
-							<input type="hidden" id="default_customer_id" 
-							value="{{ $transaction->contact->id }}" >
-							<input type="hidden" id="default_customer_name" 
-							value="{{ $transaction->contact->name }}" >
-							{!! Form::select('contact_id', 
-								[], null, ['class' => 'form-control mousetrap', 'id' => 'customer_id', 'placeholder' => 'Enter Customer name / phone', 'required']); !!}
-							<span class="input-group-btn">
-								<button type="button" class="btn btn-default bg-white btn-flat add_new_customer" data-name=""><i class="fa fa-plus-circle text-primary fa-lg"></i></button>
-								<button type="button" class="btn btn-warning bg-white btn-flat edit_customer_btn" data-contact-id="{{ $transaction->contact->id }}" title="Edit Customer Details">
-									<i class="fa fa-edit text-warning fa-lg"></i>
-								</button>
-							</span>
-						</div>
-						<small class="text-danger @if(empty($customer_due)) hide @endif contact_due_text"><strong>@lang('account.customer_due'):</strong> <span>{{$customer_due ?? ''}}</span></small>
-					</div>
-					<small>
-						<strong>
-							@lang('lang_v1.billing_address'):
-						</strong>
-						<div id="billing_address_div">
-							@php
-								$billing_address = $transaction->contact->contact_address;
-								if (empty($billing_address)) {
-									// Build address from individual fields if contact_address is empty
-									$address_parts = array_filter([
-										$transaction->contact->address_line_1,
-										$transaction->contact->city,
-										$transaction->contact->state,
-										$transaction->contact->zip_code,
-										$transaction->contact->country
-									]);
-									$billing_address = implode(', ', $address_parts);
-								}
-							@endphp
-							{!! $billing_address !!}
-							@if(!empty($transaction->contact->mobile))
-								<br><strong>Mobile:</strong> {{ $transaction->contact->mobile }}
-							@endif
-						</div>
-						<br>
-						<strong>
-							@lang('lang_v1.shipping_address'):
-						</strong>
-						<div id="shipping_address_div">
-							{!! $transaction->contact->supplier_business_name ?? '' !!}, <br>
-							{!! $transaction->contact->name ?? '' !!}, <br>
-							{!!$transaction->contact->shipping_address ?? '' !!}
-						</div>						
-					</small>
-				</div>
-
-				<div class="col-md-3">
-		          <div class="form-group">
-		            <div class="multi-input">
-		            	@php
-							$is_pay_term_required = !empty($pos_settings['is_pay_term_required']);
-						@endphp
-		              {!! Form::label('pay_term_number', __('contact.pay_term') . ':') !!} @show_tooltip(__('tooltip.pay_term'))
-		              <br/>
-		              {!! Form::number('pay_term_number', $transaction->pay_term_number, ['class' => 'form-control width-40 pull-left', 'placeholder' => __('contact.pay_term'), 'required' => $is_pay_term_required]); !!}
-
-		              {!! Form::select('pay_term_type', 
-		              	['months' => __('lang_v1.months'), 
-		              		'days' => __('lang_v1.days')], 
-		              		$transaction->pay_term_type, 
-		              	['class' => 'form-control width-60 pull-left','placeholder' => __('messages.please_select'), 'required' => $is_pay_term_required]); !!}
-		            </div>
-		          </div>
-		        </div>
-
-				@if(!empty($commission_agent))
-				@php
-					$is_commission_agent_required = !empty($pos_settings['is_commission_agent_required']);
-				@endphp
-				<div class="col-sm-3">
-					<div class="form-group">
-					{!! Form::label('commission_agent', __('lang_v1.commission_agent') . ':') !!}
-					{!! Form::select('commission_agent', 
-								$commission_agent, $transaction->commission_agent, ['class' => 'form-control select2', 'id' => 'commission_agent', 'required' => $is_commission_agent_required]); !!}
-					</div>
-				</div>
-				@endif
-				<div class="@if(!empty($commission_agent)) col-sm-3 @else col-sm-4 @endif">
+				<div class="col-sm-4">
 					<div class="form-group">
 						{!! Form::label('transaction_date', __('sale.sale_date') . ':*') !!}
 						<div class="input-group">
@@ -189,6 +202,29 @@
 						</div>
 					</div>
 				</div>
+				@can('edit_invoice_number')
+				<div class="col-sm-4">
+					<div class="form-group">
+						{!! Form::label('invoice_no', $transaction->type == 'sales_order' ? __('restaurant.order_no'): __('sale.invoice_no') . ':') !!}
+						{!! Form::text('invoice_no', $transaction->invoice_no, ['class' => 'form-control', 'placeholder' => $transaction->type == 'sales_order' ? __('restaurant.order_no'): __('sale.invoice_no')]); !!}
+						<p class="help-block">@lang('lang_v1.keep_blank_to_autogenerate')</p>
+					</div>
+				</div>
+				@endcan
+				<div class="col-sm-4">
+					<div class="form-group">
+						<div class="multi-input">
+							@php
+								$is_pay_term_required = !empty($pos_settings['is_pay_term_required']);
+							@endphp
+							{!! Form::label('pay_term_number', __('contact.pay_term') . ':') !!} @show_tooltip(__('tooltip.pay_term'))
+							<br/>
+							{!! Form::number('pay_term_number', $transaction->pay_term_number, ['class' => 'form-control width-40 pull-left', 'placeholder' => __('contact.pay_term'), 'required' => $is_pay_term_required]); !!}
+							{!! Form::select('pay_term_type', ['months' => __('lang_v1.months'), 'days' => __('lang_v1.days')], $transaction->pay_term_type, ['class' => 'form-control width-60 pull-left', 'placeholder' => __('messages.please_select'), 'required' => $is_pay_term_required]); !!}
+						</div>
+					</div>
+				</div>
+				<div class="clearfix"></div>
 				@php
 					if($transaction->status == 'draft' && $transaction->is_quotation == 1){
 						$status = 'quotation';
@@ -198,37 +234,72 @@
 						$status = $transaction->status;
 					}
 				@endphp
-				<!-- Hidden fields for JavaScript proforma status detection -->
-				<input type="hidden" id="transaction_status" value="{{$transaction->status}}">
-				<input type="hidden" id="transaction_sub_status" value="{{$transaction->sub_status}}">
-				<input type="hidden" id="transaction_is_quotation" value="{{$transaction->is_quotation}}">
-				
-				@if($transaction->type == 'sales_order')
-					<input type="hidden" name="status" id="status" value="{{$transaction->status}}">
-				@else
-					<div class="@if(!empty($commission_agent)) col-sm-3 @else col-sm-4 @endif">
+					@if($transaction->type == 'sales_order')
+						<input type="hidden" name="status" id="status" value="{{$transaction->status}}">
+					@else
+						<div class="col-sm-4">
+							<div class="form-group">
+								{!! Form::label('status', __('sale.status') . ':*') !!}
+								{!! Form::select('status', $statuses, $status, ['class' => 'form-control select2-status', 'id' => 'status', 'placeholder' => __('messages.please_select'), 'required']); !!}
+							</div>
+						</div>
+					@endif
+					<div class="col-sm-4">
 						<div class="form-group">
-							{!! Form::label('status', __('sale.status') . ':*') !!}
-							{!! Form::select('status', $statuses, $status, ['class' => 'form-control select2', 'placeholder' => __('messages.please_select'), 'required']); !!}
+							{!! Form::label('contact_id', __('contact.customer') . ':*') !!}
+							<div class="input-group">
+								<span class="input-group-addon">
+									<i class="fa fa-user"></i>
+								</span>
+								<input type="hidden" id="default_customer_id" value="{{ $transaction->contact->id }}">
+								<input type="hidden" id="default_customer_name" value="{{ $transaction->contact->name }}">
+								{!! Form::select('contact_id', [], null, ['class' => 'form-control mousetrap', 'id' => 'customer_id', 'placeholder' => 'Enter Customer name / phone / Tax ID', 'required']); !!}
+								<span class="input-group-btn">
+									<button type="button" class="btn btn-default bg-white btn-flat add_new_customer" data-name=""><i class="fa fa-plus-circle text-primary fa-lg"></i></button>
+									<button type="button" class="btn btn-warning bg-white btn-flat edit_customer_btn" data-contact-id="{{ $transaction->contact->id }}" title="Edit Customer Details">
+										<i class="fa fa-edit text-warning fa-lg"></i>
+									</button>
+								</span>
+							</div>
+							<small class="text-danger @if(empty($customer_due)) hide @endif contact_due_text"><strong>@lang('account.customer_due'):</strong> <span>{{$customer_due ?? ''}}</span></small>
 						</div>
 					</div>
-				@endif
-				@if($transaction->status == 'draft')
-				<div class="col-sm-3">
-					<div class="form-group">
-						{!! Form::label('invoice_scheme_id', __('invoice.invoice_scheme') . ':') !!}
-						{!! Form::select('invoice_scheme_id', $invoice_schemes, $default_invoice_schemes->id, ['class' => 'form-control select2', 'placeholder' => __('messages.please_select')]); !!}
+					@if($transaction->status == 'draft')
+					<div class="col-sm-4">
+						<div class="form-group">
+							{!! Form::label('invoice_scheme_id', __('invoice.invoice_scheme') . ':') !!}
+							@php
+								$selected_invoice_scheme_id = $transaction->invoice_scheme_id ?? ($default_invoice_schemes->id ?? null);
+								if ($status === 'quotation') {
+									$selected_invoice_scheme_id = 1;
+								} elseif ($status === 'final') {
+									$selected_invoice_scheme_id = 5;
+								} else {
+									$selected_invoice_scheme_id = 4;
+								}
+								$invoice_scheme_keys = $invoice_schemes instanceof \Illuminate\Support\Collection
+									? $invoice_schemes->keys()->map(fn($k) => (string) $k)->all()
+									: array_map('strval', array_keys((array) $invoice_schemes));
+								if (!in_array((string) $selected_invoice_scheme_id, $invoice_scheme_keys, true)) {
+									$selected_invoice_scheme_id = $transaction->invoice_scheme_id ?? ($default_invoice_schemes->id ?? null);
+								}
+							@endphp
+							{!! Form::select('invoice_scheme_id', $invoice_schemes, $selected_invoice_scheme_id, ['class' => 'form-control select2-invoice-scheme', 'id' => 'invoice_scheme_id', 'placeholder' => __('messages.please_select')]); !!}
+						</div>
 					</div>
-				</div>
-				@endif
-				@can('edit_invoice_number')
-				<div class="col-sm-3">
-					<div class="form-group">
-						{!! Form::label('invoice_no', $transaction->type == 'sales_order' ? __('restaurant.order_no'): __('sale.invoice_no') . ':') !!}
-						{!! Form::text('invoice_no', $transaction->invoice_no, ['class' => 'form-control', 'placeholder' => $transaction->type == 'sales_order' ? __('restaurant.order_no'): __('sale.invoice_no')]); !!}
+					@endif
+					@if(!empty($commission_agent))
+					@php
+						$is_commission_agent_required = !empty($pos_settings['is_commission_agent_required']);
+					@endphp
+					<div class="col-sm-4">
+						<div class="form-group">
+							{!! Form::label('commission_agent', __('lang_v1.commission_agent') . ':') !!}
+							{!! Form::select('commission_agent', $commission_agent, $transaction->commission_agent, ['class' => 'form-control select2', 'id' => 'commission_agent', 'required' => $is_commission_agent_required]); !!}
+						</div>
 					</div>
-				</div>
-				@endcan
+					@endif
+					<div class="clearfix"></div>
 				@php
 			        $custom_field_1_label = !empty($custom_labels['sell']['custom_field_1']) ? $custom_labels['sell']['custom_field_1'] : '';
 
@@ -306,7 +377,7 @@
 				        </div>
 				    </div>
 		        @endif
-		        <div class="col-sm-3">
+		        <div class="col-sm-3" style="display:none;">
 	                <div class="form-group">
 	                    {!! Form::label('upload_document', __('purchase.attach_document') . ':') !!}
 	                    {!! Form::file('sell_document', ['id' => 'upload_document', 'accept' => implode(',', array_keys(config('constants.document_upload_mimes_types')))]); !!}
@@ -330,12 +401,7 @@
 		        		data-transaction_id="{{$transaction->id}}">
 		        	</span>
 		        @endif
-			    </div>
-			</div>
-			
-			<div class="box box-solid">
-			    <div class="box-body">
-				<div class="col-sm-10 col-sm-offset-1">
+					<div class="col-sm-10 col-sm-offset-1">
 					<div class="form-group">
 						<div class="input-group">
 							<div class="input-group-btn">
@@ -423,13 +489,8 @@
 					</table>
 					</div>
 				</div>
-			    </div>
-			</div>
-
-			<div class="box box-solid">
-			    <div class="box-body">
-				<div class="col-md-4 @if($transaction->type == 'sales_order') hide @endif">
-			        <div class="form-group">
+					<div class="col-md-4 @if($transaction->type == 'sales_order') hide @endif">
+				        <div class="form-group">
 			            {!! Form::label('discount_type', __('sale.discount_type') . ':*' ) !!}
 			            <div class="input-group">
 			                <span class="input-group-addon">
@@ -507,14 +568,18 @@
 					</div>
 			    </div>
 			    <input type="hidden" name="is_direct_sale" value="1">
-			    </div>
-			</div>
+			@endcomponent
 
-			<div class="box box-solid">
-			    <div class="box-body">
-			<div class="col-md-4">
-				<div class="form-group">
-		            {!! Form::label('shipping_details', __('sale.shipping_details')) !!}
+			@component('components.widget', ['class' => 'box-solid'])
+				<div class="col-md-12 text-right" style="margin-bottom: 10px;">
+					<button type="button" class="btn btn-default btn-sm toggle-section-btn" data-target="#shipping_section_fields" data-show-text="แสดงรายละเอียดการจัดส่ง" data-hide-text="ซ่อนรายละเอียดการจัดส่ง">
+						<i class="fa fa-chevron-down"></i> <span class="toggle-text">แสดงรายละเอียดการจัดส่ง</span>
+					</button>
+				</div>
+				<div id="shipping_section_fields" style="display: none;">
+				<div class="col-md-4">
+					<div class="form-group">
+			            {!! Form::label('shipping_details', __('sale.shipping_details')) !!}
 		            {!! Form::textarea('shipping_details',$transaction->shipping_details, ['class' => 'form-control','placeholder' => __('sale.shipping_details') ,'rows' => '3', 'cols'=>'30']); !!}
 		        </div>
 			</div>
@@ -667,7 +732,7 @@
             </div>
 	        <div class="clearfix"></div>
 	        <div class="col-md-12 text-center">
-				<button type="button" class="btn btn-primary btn-sm" id="toggle_additional_expense"> <i class="fas fa-plus"></i> @lang('lang_v1.add_additional_expenses') <i class="fas fa-chevron-down"></i></button>
+				<button type="button" class="tw-dw-btn tw-dw-btn-primary tw-text-white tw-dw-btn-sm" id="toggle_additional_expense"> <i class="fas fa-plus"></i> @lang('lang_v1.add_additional_expenses') <i class="fas fa-chevron-down"></i></button>
 			</div>
 			<div class="col-md-8 col-md-offset-4" id="additional_expenses_div">
 				<table class="table table-condensed">
@@ -713,26 +778,22 @@
 					</tbody>
 				</table>
 			</div>
-		    <div class="col-md-4 col-md-offset-8">
-		    	@if(!empty($pos_settings['amount_rounding_method']) && $pos_settings['amount_rounding_method'] > 0)
-		    	<small id="round_off"><br>(@lang('lang_v1.round_off'): <span id="round_off_text">0</span>)</small>
+			    <div class="col-md-4 col-md-offset-8">
+			    	@if(!empty($pos_settings['amount_rounding_method']) && $pos_settings['amount_rounding_method'] > 0)
+			    	<small id="round_off"><br>(@lang('lang_v1.round_off'): <span id="round_off_text">0</span>)</small>
 				<br/>
 				<input type="hidden" name="round_off_amount" 
 					id="round_off_amount" value=0>
 				@endif
 		    	<div><b>@lang('sale.total_payable'): </b>
 					<input type="hidden" name="final_total" id="final_total_input">
-					<span id="total_payable">0</span>
-				</div>
-		    </div>
+						<span id="total_payable">0</span>
+					</div>
 			    </div>
-			</div>
+				</div>
+			@endcomponent
 			@if(!empty($common_settings['is_enabled_export']) && $transaction->type != 'sales_order')
-				<div class="box box-solid">
-				    <div class="box-header">
-				        <h3 class="box-title">{{ __('lang_v1.export') }}</h3>
-				    </div>
-				    <div class="box-body">
+				@component('components.widget', ['class' => 'box-solid', 'title' => __('lang_v1.export')])
 					<div class="col-md-12 mb-12">
 		                <div class="form-check">
 		                    <input type="checkbox" name="is_export" class="form-check-input" id="is_export" @if(!empty($transaction->is_export)) checked @endif>
@@ -750,24 +811,25 @@
 		                    </div>
 		                </div>
 		            @endfor
-				    </div>
-				</div>
+				@endcomponent
 			@endif
 		</div>
 	</div>
 	@php
 		$is_enabled_download_pdf = config('constants.enable_download_pdf');
 	@endphp
-	@if($is_enabled_download_pdf && $transaction->type != 'sales_order')
-		@can('sell.payments')
-			<div class="box box-solid">
-			    <div class="box-header">
-			        <h3 class="box-title">{{ __('purchase.add_payment') }}</h3>
-			    </div>
-			    <div class="box-body">
-				<div class="well row">
-					<div class="col-md-6">
-						<div class="form-group">
+		@if($is_enabled_download_pdf && $transaction->type != 'sales_order')
+			@can('sell.payments')
+				@component('components.widget', ['class' => 'box-solid', 'title' => __('purchase.add_payment')])
+					<div class="col-md-12 text-right" style="margin-bottom: 10px;">
+						<button type="button" class="btn btn-default btn-sm toggle-section-btn" data-target="#prefer_payment_section_fields" data-show-text="แสดงเพิ่มการชำระเงิน" data-hide-text="ซ่อนเพิ่มการชำระเงิน">
+							<i class="fa fa-chevron-down"></i> <span class="toggle-text">แสดงเพิ่มการชำระเงิน</span>
+						</button>
+					</div>
+					<div id="prefer_payment_section_fields" style="display: none;">
+					<div class="well row">
+						<div class="col-md-6">
+							<div class="form-group">
 							{!! Form::label("prefer_payment_method" , __('lang_v1.prefer_payment_method') . ':') !!}
 							@show_tooltip(__('lang_v1.this_will_be_shown_in_pdf'))
 							<div class="input-group">
@@ -788,21 +850,23 @@
 								</span>
 								{!! Form::select("prefer_payment_account", $accounts, $transaction->prefer_payment_account, ['class' => 'form-control','style' => 'width:100%;']); !!}
 							</div>
+							</div>
 						</div>
 					</div>
-				</div>
-			    </div>
-			</div>
-		@endcan
-	@endif
+					</div>
+				@endcomponent
+			@endcan
+		@endif
 
 	@if($transaction->type = 'sell')
 	@can('sell.payments')
-		<div class="box box-solid">
-		    <div class="box-header">
-		        <h3 class="box-title">{{ __('purchase.add_payment') }}</h3>
-		    </div>
-		    <div class="box-body">
+		@component('components.widget', ['class' => 'box-solid', 'title' => __('purchase.add_payment')])
+		<div class="col-md-12 text-right" style="margin-bottom: 10px;">
+			<button type="button" class="btn btn-default btn-sm toggle-section-btn" data-target="#payment_section_fields" data-show-text="แสดงเพิ่มการชำระเงิน" data-hide-text="ซ่อนเพิ่มการชำระเงิน">
+				<i class="fa fa-chevron-down"></i> <span class="toggle-text">แสดงเพิ่มการชำระเงิน</span>
+			</button>
+		</div>
+		<div id="payment_section_fields" style="display: none;">
 		<div class="row">
 			@foreach($payment_lines as $payment_line)			
 				@if($payment_line['is_return'] == 1)
@@ -869,18 +933,18 @@
 					</div>
 				</div>
 			</div>
-			@endif
+				@endif
 			@include('sale_pos.partials.payment_type_details', ['payment_line' => $change_return, 'row_index' => 'change_return'])
 		</div>
-		    </div>
 		</div>
+		@endcomponent
 	@endcan
 	@endif
 	<div class="row">
 		<div class="col-md-12 text-center">
 	    	{!! Form::hidden('is_save_and_print', 0, ['id' => 'is_save_and_print']); !!}
-	    	<button type="button" class="btn btn-primary btn-lg" id="submit-sell">@lang('messages.update')</button>
-	    	<button type="button" id="save-and-print" class="btn btn-success btn-lg">@lang('lang_v1.update_and_print')</button>
+	    	<button type="button" class="tw-dw-btn tw-dw-btn-primary tw-text-white tw-dw-btn-lg" id="submit-sell">@lang('messages.update')</button>
+	    	<button type="button" id="save-and-print" class="tw-dw-btn tw-dw-btn-success tw-text-white tw-dw-btn-lg">@lang('lang_v1.update_and_print')</button>
 	    </div>
 	</div>
 	@if(in_array('subscription', $enabled_modules))
@@ -890,7 +954,7 @@
 </section>
 
 <div class="modal fade contact_modal" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel">
-	@include('contact.create', ['quick_add' => true])
+	@include('contact.create_compact_customer', ['quick_add' => true])
 </div>
 <!-- /.content -->
 <div class="modal fade register_details_modal" tabindex="-1" role="dialog" 
@@ -906,27 +970,6 @@
 
 @stop
 
-@section('css')
-    <style>
-        .select2-search__field {
-            background-color: white !important;
-            color: black !important;
-            box-shadow: none !important;
-        }
-        .select2-search--dropdown .select2-search__field {
-            background-color: white !important;
-            color: black !important;
-            border: 1px solid #ddd !important;
-            box-shadow: none !important;
-        }
-        .select2-container--default .select2-search--dropdown .select2-search__field {
-            background-color: white !important;
-            color: black !important;
-            box-shadow: none !important;
-        }
-    </style>
-@endsection
-
 @section('javascript')
 	<script src="{{ asset('js/pos.js?v=' . $asset_v) }}"></script>
 	<script src="{{ asset('js/product.js?v=' . $asset_v) }}"></script>
@@ -936,57 +979,7 @@
     	<script src="{{ asset('js/restaurant.js?v=' . $asset_v) }}"></script>
     @endif
     <script type="text/javascript">
-        // Function to ensure proforma status is correctly set on edit pages
-        function ensureProformaStatus() {
-            // Check if we're on an edit page with status dropdown
-            var statusDropdown = $('select[name="status"]');
-            if (statusDropdown.length > 0) {
-                // Check if transaction is actually proforma from hidden fields
-                var transaction_status = $('#transaction_status').val();
-                var transaction_sub_status = $('#transaction_sub_status').val();
-                
-                console.log('ensureProformaStatus() - Transaction Status:', transaction_status);
-                console.log('ensureProformaStatus() - Transaction Sub Status:', transaction_sub_status);
-                console.log('ensureProformaStatus() - Current dropdown value:', statusDropdown.val());
-                
-                // If it's a proforma invoice, force set the dropdown to proforma
-                if (transaction_status == 'draft' && transaction_sub_status == 'proforma') {
-                    statusDropdown.val('proforma');
-                    statusDropdown.trigger('change');
-                    console.log('✅ Status automatically set to proforma on edit load');
-                    return true;
-                }
-            }
-            return false;
-        }
-        
     	$(document).ready( function(){
-            function resetSelect2DropdownParent($select) {
-                var $parent = $select.closest('.input-group');
-                if ($parent.length === 0) {
-                    $parent = $select.parent();
-                }
-                var existing = $select.data('select2');
-                if (existing) {
-                    var options = $.extend(true, {}, existing.options.options);
-                    options.dropdownParent = $parent;
-                    $select.select2('destroy');
-                    $select.select2(options);
-                } else {
-                    $select.select2({ dropdownParent: $parent });
-                }
-            }
-
-            $('.select2').each(function() {
-                resetSelect2DropdownParent($(this));
-            });
-            if ($('#customer_id').length) {
-                resetSelect2DropdownParent($('#customer_id'));
-            }
-
-            // Auto-run proforma status fix immediately when page loads
-            ensureProformaStatus();
-            
     		$('#shipping_documents').fileinput({
 		        showUpload: false,
 		        showPreview: false,
@@ -1002,265 +995,89 @@
 	            }
 	        });
 
+			function syncInvoiceSchemeByStatus() {
+				var $status = $('#status');
+				var $scheme = $('#invoice_scheme_id');
+				if (!$status.length || !$scheme.length) {
+					return;
+				}
+
+				var statusVal = ($status.val() || '').toString();
+				var mapped = {
+					quotation: '1',
+					proforma: '4',
+					draft: '4',
+					final: '5'
+				};
+				var target = mapped[statusVal];
+				if (!target) {
+					return;
+				}
+
+				if ($scheme.find("option[value='" + target + "']").length) {
+					$scheme.val(target).trigger('change');
+				}
+			}
+
+			syncInvoiceSchemeByStatus();
+
 	        $('#status').change(function(){
     			if ($(this).val() == 'final') {
     				$('#payment_rows_div').removeClass('hide');
     			} else {
     				$('#payment_rows_div').addClass('hide');
     			}
+				syncInvoiceSchemeByStatus();
     		});
-    		$('.paid_on').datetimepicker({
+	    		$('.paid_on').datetimepicker({
                 format: moment_date_format + ' ' + moment_time_format,
                 ignoreReadonly: true,
             });
 
-            // Edit customer button functionality
-            $(document).on('click', '.edit_customer_btn', function(e) {
-                e.preventDefault();
-                var contactId = $(this).data('contact-id');
-                console.log('Edit customer button clicked for contact ID:', contactId);
-                
-                if (contactId) {
-                    // Open the contact modal in edit mode
-                    $('.contact_modal').modal('show');
-                    
-                    // Load the edit form via AJAX
-                    $.ajax({
-                        url: '/contacts/' + contactId + '/edit',
-                        type: 'GET',
-                        success: function(response) {
-                            // Replace the modal content with the edit form
-                            $('.contact_modal .modal-content').html(response);
-                            console.log('Customer edit form loaded successfully');
-                        },
-                        error: function(xhr, status, error) {
-                            console.error('Error loading customer edit form:', error);
-                            toastr.error('Error loading customer edit form');
-                        }
-                    });
-                } else {
-                    toastr.error('Customer ID not found');
-                }
-            });
+			$(document).on('click', '.toggle-section-btn', function() {
+				var $btn = $(this);
+				var target = $btn.data('target');
+				var $target = $(target);
+				if (!$target.length) {
+					return;
+				}
 
-            // Update billing address when customer is updated
-            $(document).on('contact_updated', function(e, contact) {
-                // Update the billing address display
-                var billingHtml = (contact.contact_address || contact.address_line_1 || '') + 
-                                 (contact.mobile ? '<br><strong>Mobile:</strong> ' + contact.mobile : '');
-                $('#billing_address_div').html(billingHtml);
-                
-                // Update shipping address display
-                var shippingHtml = (contact.supplier_business_name || '') + 
-                                  (contact.supplier_business_name ? ', <br>' : '') +
-                                  (contact.name || '') + ', <br>' +
-                                  (contact.shipping_address || contact.address_line_1 || '');
-                $('#shipping_address_div').html(shippingHtml);
-                
-                console.log('Address displays updated');
-            });
+				var showText = $btn.data('show-text') || 'แสดง';
+				var hideText = $btn.data('hide-text') || 'ซ่อน';
+				var $icon = $btn.find('i.fa');
+				var $text = $btn.find('.toggle-text');
+
+				if ($target.is(':visible')) {
+					$target.slideUp(180);
+					$icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+					$text.text(showText);
+				} else {
+					$target.slideDown(180);
+					$icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+					$text.text(hideText);
+				}
+			});
+
+			$(document).on('click', '.edit_customer_btn', function(e) {
+				e.preventDefault();
+				var contactId = $(this).data('contact-id') || $('#customer_id').val();
+				if (!contactId) {
+					toastr.error('Please select a customer first');
+					return;
+				}
+
+				$('.contact_modal').modal('show');
+				$.ajax({
+					url: '/contacts/' + contactId + '/edit?compact=1',
+					type: 'GET',
+					success: function(response) {
+						$('.contact_modal .modal-content').html(response);
+					},
+					error: function() {
+						toastr.error('Error loading customer edit form');
+					}
+				});
+			});
     	});
-
-
-
-
-
-let invoiceValue = document.getElementById("invoice_no").value;
-
-// Extract only the "QUOTE" part
-var prefix = invoiceValue.match(/[A-Za-z]+/)[0];
-
-console.log(prefix); // QUOTE
-
-
-
-
-
-
-
-
-
-
-// Simple diagnostic for regular edit page
-
-
-// Check the status dropdown
-var statusSelect = document.querySelector('select[name="status"]');
-if (statusSelect) {
-    
-    var options = statusSelect.querySelectorAll('option');
-    options.forEach(function(option, index) {
-        var selected = option.selected ? ' (SELECTED)' : '';
-      
-    });
-}
-
-// Check for any other status-related inputs
-var allStatusInputs = document.querySelectorAll('[name*="status"], [id*="status"]');
-console.log('All status-related elements:');
-allStatusInputs.forEach(function(element, index) {
-    console.log('  ' + index + ':', element.tagName, element.type, element.name, element.id, '= "' + element.value + '"');
-});
-
-// Check form data when submitted
-var form = document.querySelector('form#edit_sell_form');
-if (form) {
-    console.log('Form found, checking current serialized data...');
-    
-    // Get form data
-    var formData = new FormData(form);
-    var serialized = [];
-    for (var pair of formData.entries()) {
-        if (pair[0].includes('status')) {
-            serialized.push(pair[0] + '=' + pair[1]);
-        }
-    }
-   
-}
-
-// Monitor status changes
-if (statusSelect) {
-    statusSelect.addEventListener('change', function() {
-       
-    });
-   
-}
-
-console.log('=== END DIAGNOSTIC ===');
-
-// Quick fix function
-window.ensureProformaStatus = function() {
-    var statusSelect = document.querySelector('select[name="status"]');
-	if(prefix === "VT") {
-    if (statusSelect) {
-        var proformaOption = statusSelect.querySelector('option[value="proforma"]');
-        if (proformaOption) {
-            statusSelect.value = 'proforma';
-            console.log('✅ Status set to proforma');
-            
-            // Trigger change event
-            var changeEvent = new Event('change', { bubbles: true });
-            statusSelect.dispatchEvent(changeEvent);
-            setInvoiceSchemeById(4); // Assuming 2 is the ID for TAX-INVOICE scheme
-            return true;
-        } else {
-            console.log('❌ No proforma option found');
-            return false;
-        }
-    }
-	}
-    console.log('Invoice prefix is not VT, skipping proforma set');
-    return false;
-};
-
-console.log('Run ensureProformaStatus() to force set status to proforma');
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Function to find and set TAX-INVOICE scheme
-window.setTaxInvoiceScheme = function() {
-    var invoiceSchemeSelect = document.querySelector('select[name="invoice_scheme_id"]');
-    if (invoiceSchemeSelect) {
-        var options = invoiceSchemeSelect.querySelectorAll('option');
-        var taxInvoiceOption = null;
-        
-        // Look for TAX-INVOICE option (search for Thai text or TAX-INVOICE)
-        options.forEach(function(option) {
-            var text = option.textContent.trim().toLowerCase();
-            if (text.includes('tax-invoice') || 
-                text.includes('ใบกำกับภาษี') || 
-                text.includes('ใบแจ้งหนี้') ||
-                text.includes('tax invoice')) {
-                taxInvoiceOption = option;
-                console.log('Found TAX-INVOICE option:', option.textContent.trim());
-            }
-        });
-        
-        if (taxInvoiceOption) {
-            invoiceSchemeSelect.value = taxInvoiceOption.value;
-            console.log('✅ Invoice scheme set to:', taxInvoiceOption.textContent.trim());
-            
-            // Trigger change event
-            var changeEvent = new Event('change', { bubbles: true });
-            invoiceSchemeSelect.dispatchEvent(changeEvent);
-            
-            return true;
-        } else {
-            console.log('❌ TAX-INVOICE option not found');
-            console.log('Available options:');
-            options.forEach(function(option, index) {
-                if (option.value) {
-                    console.log('  ' + index + ': "' + option.textContent.trim() + '"');
-                }
-            });
-            return false;
-        }
-    } else {
-        console.log('❌ Invoice scheme dropdown not found');
-        return false;
-    }
-};
-
-// Function to manually set invoice scheme by value (if you know the ID)
-window.setInvoiceSchemeById = function(schemeId) {
-    var invoiceSchemeSelect = document.querySelector('select[name="invoice_scheme_id"]');
-    if (invoiceSchemeSelect) {
-        var option = invoiceSchemeSelect.querySelector('option[value="' + schemeId + '"]');
-        if (option) {
-            invoiceSchemeSelect.value = schemeId;
-            console.log('✅ Invoice scheme set to:', option.textContent.trim());
-            
-            // Trigger change event
-            var changeEvent = new Event('change', { bubbles: true });
-            invoiceSchemeSelect.dispatchEvent(changeEvent);
-            
-            return true;
-        } else {
-            console.log('❌ Invoice scheme with ID "' + schemeId + '" not found');
-            return false;
-        }
-    } else {
-        console.log('❌ Invoice scheme dropdown not found');
-        return false;
-    }
-};
-
-// Monitor invoice scheme changes
-if (invoiceSchemeSelect) {
-    invoiceSchemeSelect.addEventListener('change', function() {
-        console.log('INVOICE SCHEME CHANGED TO:', this.value, '-', this.options[this.selectedIndex].text.trim());
-    });
-    console.log('Now monitoring invoice scheme dropdown for changes...');
-}
-
-
-
     </script>
 @endsection

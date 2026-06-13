@@ -3,6 +3,55 @@
 
 @section('content')
 
+<style>
+/* Fix Brand, Category, Unit and Barcode Type dropdown width */
+#brand_id + .select2-container,
+#hierarchical_category_id + .select2-container,
+#unit_id + .select2-container,
+#barcode_type + .select2-container {
+    width: 100% !important;
+}
+
+.form-group {
+    position: relative;
+}
+
+/* Remove black background from Select2 */
+#brand_id + .select2-container .select2-selection {
+    background-color: #fff !important;
+    border: 1px solid #ccc !important;
+}
+
+#brand_id + .select2-container .select2-selection__rendered {
+    background-color: #fff !important;
+    color: #333 !important;
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    background-color: #fff !important;
+    color: #333 !important;
+}
+
+.select2-dropdown {
+    background-color: #fff !important;
+}
+
+.select2-results__option {
+    background-color: #fff !important;
+    color: #333 !important;
+}
+
+.select2-results__option--highlighted {
+    background-color: #5897fb !important;
+    color: #fff !important;
+}
+
+.unit-brand-label {
+    display: block;
+    width: 100%;
+}
+</style>
+
 <!-- Content Header (Page header) -->
 <section class="content-header">
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">@lang('product.add_new_product')</h1>
@@ -41,6 +90,16 @@
 
             <div class="col-sm-4">
                 <div class="form-group">
+                    {!! Form::label('second_name', 'Second Name' . ':') !!}
+                    {!! Form::text('second_name', !empty($duplicate_product->second_name) ? $duplicate_product->second_name : null, [
+                        'class' => 'form-control',
+                        'placeholder' => 'Second Name'
+                    ]); !!}
+                </div>
+            </div>
+
+            <div class="col-sm-4">
+                <div class="form-group">
                     {!! Form::label('sku', __('product.sku') . ':') !!}
                     @show_tooltip(__('tooltip.sku'))
                     <div class="input-group">
@@ -63,7 +122,8 @@
                 <div class="form-group">
                     {!! Form::label('barcode_type', __('product.barcode_type') . ':*') !!}
                     {!! Form::select('barcode_type', $barcode_types, !empty($duplicate_product->barcode_type) ? $duplicate_product->barcode_type : $barcode_default, [
-                        'class' => 'form-control select2',
+                        'class' => 'form-control select2-barcode-type',
+                        'id' => 'barcode_type',
                         'required'
                     ]); !!}
                 </div>
@@ -73,10 +133,11 @@
             
             <div class="col-sm-4">
                 <div class="form-group">
-                    {!! Form::label('unit_id', __('product.unit') . ':*') !!}
+                    {!! Form::label('unit_id', __('product.unit') . ':*', ['class' => 'unit-brand-label']) !!}
                     <div class="input-group">
                         {!! Form::select('unit_id', $units, !empty($duplicate_product->unit_id) ? $duplicate_product->unit_id : session('business.default_unit'), [
-                            'class' => 'form-control select2',
+                            'class' => 'form-control select2-unit',
+                            'id' => 'unit_id',
                             'required'
                         ]); !!}
                         <span class="input-group-btn">
@@ -118,11 +179,12 @@
 
             <div class="col-sm-4 @if(!session('business.enable_brand')) hide @endif">
                 <div class="form-group">
-                    {!! Form::label('brand_id', __('product.brand') . ':') !!}
+                    {!! Form::label('brand_id', __('product.brand') . ':', ['class' => 'unit-brand-label']) !!}
                     <div class="input-group">
                         {!! Form::select('brand_id', $brands, !empty($duplicate_product->brand_id) ? $duplicate_product->brand_id : null, [
                             'placeholder' => __('messages.please_select'),
-                            'class' => 'form-control select2'
+                            'class' => 'form-control select2-brand',
+                            'id' => 'brand_id'
                         ]); !!}
                         <span class="input-group-btn">
                             <button type="button" @if(!auth()->user()->can('brand.create')) disabled @endif 
@@ -140,8 +202,8 @@
             <div class="col-sm-4 @if(!session('business.enable_category')) hide @endif">
                 <div class="form-group">
                     {!! Form::label('hierarchical_category_id', __('product.category') . ':') !!}
-                    <select name="hierarchical_category_selection" id="hierarchical_category_id" 
-                        class="form-control select2">
+                    <select name="hierarchical_category_selection" id="hierarchical_category_id"
+                        class="form-control select2-category">
                         <option value="">{{ __('messages.please_select') }}</option>
                         @foreach($hierarchical_categories as $cat_id => $cat_name)
                             <option value="{{ $cat_id }}" {{ 
@@ -529,7 +591,102 @@
         
         // Auto-generate SKU on page load
         autoGenerateSKU();
-        
+
+        // Fix Brand dropdown positioning
+        var $brandSelect = $('#brand_id');
+        if ($brandSelect.length) {
+            var $brandFormGroup = $brandSelect.closest('.form-group');
+            $brandSelect.select2({
+                dropdownParent: $brandFormGroup,
+                width: '100%',
+                dropdownAutoWidth: false,
+                placeholder: '{{ __("messages.please_select") }}'
+            });
+
+            // Ensure dropdown width matches select width when opened
+            $brandSelect.on('select2:open', function() {
+                setTimeout(function() {
+                    var $container = $brandSelect.next('.select2-container');
+                    var containerWidth = $container.outerWidth();
+                    $brandFormGroup.find('.select2-dropdown').css({
+                        'width': containerWidth + 'px',
+                        'min-width': containerWidth + 'px'
+                    });
+                }, 0);
+            });
+        }
+
+        // Fix Category dropdown positioning
+        var $categorySelect = $('#hierarchical_category_id');
+        if ($categorySelect.length) {
+            var $categoryFormGroup = $categorySelect.closest('.form-group');
+            $categorySelect.select2({
+                dropdownParent: $categoryFormGroup,
+                width: '100%',
+                dropdownAutoWidth: false,
+                placeholder: '{{ __("messages.please_select") }}'
+            });
+
+            // Ensure dropdown width matches select width when opened
+            $categorySelect.on('select2:open', function() {
+                setTimeout(function() {
+                    var $container = $categorySelect.next('.select2-container');
+                    var containerWidth = $container.outerWidth();
+                    $categoryFormGroup.find('.select2-dropdown').css({
+                        'width': containerWidth + 'px',
+                        'min-width': containerWidth + 'px'
+                    });
+                }, 0);
+            });
+        }
+
+        // Fix Unit dropdown positioning
+        var $unitSelect = $('#unit_id');
+        if ($unitSelect.length) {
+            $unitSelect.find('option[value=""]').slice(1).remove();
+            var $unitFormGroup = $unitSelect.closest('.form-group');
+            $unitSelect.select2({
+                dropdownParent: $unitFormGroup,
+                width: '100%',
+                dropdownAutoWidth: false
+            });
+
+            // Ensure dropdown width matches select width when opened
+            $unitSelect.on('select2:open', function() {
+                setTimeout(function() {
+                    var $container = $unitSelect.next('.select2-container');
+                    var containerWidth = $container.outerWidth();
+                    $unitFormGroup.find('.select2-dropdown').css({
+                        'width': containerWidth + 'px',
+                        'min-width': containerWidth + 'px'
+                    });
+                }, 0);
+            });
+        }
+
+        // Fix Barcode Type dropdown positioning
+        var $barcodeTypeSelect = $('#barcode_type');
+        if ($barcodeTypeSelect.length) {
+            var $barcodeTypeFormGroup = $barcodeTypeSelect.closest('.form-group');
+            $barcodeTypeSelect.select2({
+                dropdownParent: $barcodeTypeFormGroup,
+                width: '100%',
+                dropdownAutoWidth: false
+            });
+
+            // Ensure dropdown width matches select width when opened
+            $barcodeTypeSelect.on('select2:open', function() {
+                setTimeout(function() {
+                    var $container = $barcodeTypeSelect.next('.select2-container');
+                    var containerWidth = $container.outerWidth();
+                    $barcodeTypeFormGroup.find('.select2-dropdown').css({
+                        'width': containerWidth + 'px',
+                        'min-width': containerWidth + 'px'
+                    });
+                }, 0);
+            });
+        }
+
         // Initialize barcode scanner with error handling
         try {
             if (typeof onScan !== 'undefined') {

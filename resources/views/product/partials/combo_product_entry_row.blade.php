@@ -6,22 +6,22 @@
 
 @foreach($variations as $variation)
 	<tr>
-		<td class="text-center">
-			@if($product->type == 'variable')
-				{{ $product->name }} ({{ $variation->name }}) - {{ $variation->sub_sku }}
-				@else
-					{{ $product->name }} - {{ $variation->sub_sku }}
-				@endif
+        <td class="text-center">
+            @if($product->type == 'variable')
+                {{ $product->name }} ({{ $variation->name }}) - {{ $variation->sub_sku }}
+            @else
+                {{ $product->name }} - {{ $variation->sub_sku }}
+            @endif
 
-				<input type="hidden" name="composition_variation_id[]" value="{{ $variation->id }}">
-		</td>
-		<td class="text-center">
-			{!! Form::text('quantity[]', @num_format($quantity), ['class' => 'form-control col-sm-12 input-sm quantity input_number mousetrap', 'required', 'style '=> "width: 77px"]); !!}
+            <input type="hidden" name="composition_variation_id[]" value="{{ $variation->id }}">
+        </td>
+        <td class="text-center">
+            {!! Form::text('quantity[]', @num_format($quantity), ['class' => 'form-control col-sm-12 input-sm quantity input_number mousetrap', 'required', 'style '=> "width: 77px"]); !!}
 
-			@if(!empty($sub_units))
+            @if(!empty($sub_units))
                 <br>
                 <select name="unit[]" 
-                	class="form-control input-sm sub_unit">
+                    class="form-control input-sm sub_unit">
                     @foreach($sub_units as $key => $value)
                         <option value="{{$key}}" 
                        data-multiplier="{{$value['multiplier']}}"
@@ -32,8 +32,8 @@
                     @endforeach
                 </select>
             @else 
-            	<input type="hidden" name="unit[]" value="{{$product->unit->id}}">
-                {{ $product->unit->short_name }}
+                <input type="hidden" name="unit[]" value="{{ $product->unit->id ?? '' }}">
+                {{ $product->unit->short_name ?? '--' }}
             @endif
 
 		</td>

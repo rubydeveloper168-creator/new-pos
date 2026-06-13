@@ -83,5 +83,5 @@ return [
     'enable_secondary_unit' => false, //Experimental feature, may depreciate
     
     // PDF Server URL - uses API_PDF_SERVER_URL from .env, defaults to localhost:3000
-    'pdf_server_url' => env('API_PDF_SERVER_URL', 'http://localhost:3000'),
+    'pdf_server_url' => env('API_PDF_SERVER_URL', 'https://api-shop.rubyshop.co.th'),
 ];

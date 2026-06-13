@@ -1,3 +1,37 @@
+<style>
+/* Make Individual/Business radio buttons more visible */
+.contact_modal .radio-inline {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 20px 10px 12px;
+    margin-right: 10px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.contact_modal .radio-inline:hover {
+    border-color: #3c8dbc;
+    background-color: #f5f5f5;
+}
+.contact_modal .radio-inline input[type="radio"] {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #3c8dbc;
+}
+.contact_modal .radio-inline span {
+    margin-left: 20px;
+}
+.contact_modal .radio-inline:has(input[type="radio"]:checked) {
+    border-color: #3c8dbc;
+    background-color: #e8f4fc;
+}
+</style>
 <div class="modal-dialog modal-lg" role="document">
   <div class="modal-content">
   @php
@@ -40,11 +74,11 @@
             <div class="col-md-4 mt-15">
                 <label class="radio-inline">
                     <input type="radio" name="contact_type_radio" id="inlineRadio1" value="individual">
-                    @lang('lang_v1.individual')
+                    <span>@lang('lang_v1.individual')</span>
                 </label>
                 <label class="radio-inline">
                     <input type="radio" name="contact_type_radio" id="inlineRadio2" value="business">
-                    @lang('business.business')
+                    <span>@lang('business.business')</span>
                 </label>
             </div>
             <div class="col-md-4">
@@ -125,7 +159,7 @@
                 </div>
             </div>
 
-            <div class="col-md-3">
+            <div class="col-md-3" style="display: none;">
                 <div class="form-group">
                     {!! Form::label('alternate_number', __('contact.alternate_contact_number') . ':') !!}
                     <div class="input-group">
@@ -136,7 +170,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-3" style="display: none;">
                 <div class="form-group">
                     {!! Form::label('landline', __('contact.landline') . ':') !!}
                     <div class="input-group">
@@ -215,12 +249,7 @@
                 <div class="col-md-6">
                       <div class="form-group">
                           {!! Form::label('assigned_to_users', __('lang_v1.assigned_to') . ':' ) !!}
-                          <div class="input-group">
-                              <span class="input-group-addon">
-                                  <i class="fa fa-user"></i>
-                              </span>
-                              {!! Form::select('assigned_to_users[]', $users ?? [], null , ['class' => 'form-control select2', 'id' => 'assigned_to_users', 'multiple', 'style' => 'width: 100%;']); !!}
-                          </div>
+                          {!! Form::select('assigned_to_users[]', $users ?? [], null , ['class' => 'form-control select2', 'id' => 'assigned_to_users', 'multiple', 'style' => 'width: 100%;']); !!}
                       </div>
                 </div>
             @endif
@@ -229,10 +258,10 @@
         </div>
         <div class="row">
             <div class="col-md-12">
-                <button type="button" class="tw-dw-btn tw-dw-btn-primary tw-text-white tw-dw-btn-sm center-block more_btn" data-target="#more_div">@lang('lang_v1.more_info') <i class="fa fa-chevron-down"></i></button>
+                <button type="button" class="tw-dw-btn tw-dw-btn-primary tw-text-white tw-dw-btn-sm center-block more_btn" data-target="#more_div">@lang('lang_v1.more_info') <i class="fa fa-chevron-up"></i></button>
             </div>
 
-            <div id="more_div" class="hide">
+            <div id="more_div">
                 {!! Form::hidden('position', null, ['id' => 'position']); !!}
                 <div class="col-md-12"><hr/></div>
 
@@ -276,7 +305,7 @@
                   $common_settings = session()->get('business.common_settings');
                   $default_credit_limit = !empty($common_settings['default_credit_limit']) ? $common_settings['default_credit_limit'] : null;
                 @endphp
-                <div class="col-md-4 customer_fields">
+                <div class="col-md-4 customer_fields" style="display: none;">
                   <div class="form-group">
                       {!! Form::label('credit_limit', __('lang_v1.credit_limit') . ':') !!}
                       <div class="input-group">
@@ -299,7 +328,7 @@
                         {!! Form::text('address_line_1', null, ['class' => 'form-control', 'placeholder' => __('lang_v1.address_line_1'), 'rows' => 3]); !!}
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-6" style="display: none;">
                     <div class="form-group">
                         {!! Form::label('address_line_2', __('lang_v1.address_line_2') . ':') !!}
                         {!! Form::text('address_line_2', null, ['class' => 'form-control', 'placeholder' => __('lang_v1.address_line_2'), 'rows' => 3]); !!}
@@ -353,6 +382,8 @@
           </div>
 
           <div class="clearfix"></div>
+          {{-- Custom fields and shipping address - HIDDEN --}}
+          <div style="display: none;">
           <div class="col-md-12">
             <hr/>
           </div>
@@ -372,80 +403,82 @@
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field1', $contact_custom_field1 . ':') !!}
-                {!! Form::text('custom_field1', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field1', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field1]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field2', $contact_custom_field2 . ':') !!}
-                {!! Form::text('custom_field2', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field2', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field2]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field3', $contact_custom_field3 . ':') !!}
-                {!! Form::text('custom_field3', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field3', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field3]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field4', $contact_custom_field4 . ':') !!}
-                {!! Form::text('custom_field4', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field4', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field4]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field5', $contact_custom_field5 . ':') !!}
-                {!! Form::text('custom_field5', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field5', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field5]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field6', $contact_custom_field6 . ':') !!}
-                {!! Form::text('custom_field6', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field6', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field6]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field7', $contact_custom_field7 . ':') !!}
-                {!! Form::text('custom_field7', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field7', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field7]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field8', $contact_custom_field8 . ':') !!}
-                {!! Form::text('custom_field8', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field8', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field8]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field9', $contact_custom_field9 . ':') !!}
-                {!! Form::text('custom_field9', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field9', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field9]); !!}
             </div>
           </div>
           <div class="col-md-3">
             <div class="form-group">
                 {!! Form::label('custom_field10', $contact_custom_field10 . ':') !!}
-                {!! Form::text('custom_field10', null, ['class' => 'form-control', 
+                {!! Form::text('custom_field10', null, ['class' => 'form-control',
                     'placeholder' => $contact_custom_field10]); !!}
             </div>
           </div>
           <div class="col-md-12 shipping_addr_div"><hr></div>
           <div class="col-md-8 col-md-offset-2 shipping_addr_div mb-10" >
               <strong>{{__('lang_v1.shipping_address')}}</strong><br>
-              {!! Form::text('shipping_address', null, ['class' => 'form-control', 
+              {!! Form::text('shipping_address', null, ['class' => 'form-control',
                     'placeholder' => __('lang_v1.search_address'), 'id' => 'shipping_address']); !!}
             <div class="mb-10" id="map"></div>
           </div>
+          </div>
+          {{-- End hidden section --}}
           @php
                 $shipping_custom_label_1 = !empty($custom_labels['shipping']['custom_field_1']) ? $custom_labels['shipping']['custom_field_1'] : '';
 

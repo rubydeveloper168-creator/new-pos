@@ -1,25 +1,190 @@
 @extends('layouts.app')
 @section('title', __( 'lang_v1.quotation'))
 
-@push('css')
+@section('css')
 <link rel="stylesheet" href="{{ asset('css/pdf-loader.css') }}">
 <style>
-    /* Highlight newly created tax invoice */
-    .highlight-new-tax-invoice {
-        background-color: #ffebee !important;
-        border: 2px solid #f44336 !important;
-        animation: pulse-highlight-red 3s ease-in-out;
+    /* Make table rows clickable */
+    #sell_table tbody tr {
+        cursor: pointer;
     }
-    
-    @keyframes pulse-highlight-red {
-        0% { background-color: #ffcdd2; }
-        25% { background-color: #ef5350; }
-        50% { background-color: #f44336; }
-        75% { background-color: #ef5350; }
-        100% { background-color: #ffebee; }
+    #sell_table tbody tr:hover {
+        background-color: #f5f5f5;
     }
-    
-    /* Loading overlay for table refresh */
+
+    /* Fix dropdown positioning for action column */
+    .dataTables_wrapper,
+    .table-responsive,
+    .box-body {
+        overflow: visible !important;
+    }
+
+    /* Action column dropdown positioning */
+    #sell_table .btn-group {
+        position: relative;
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    #sell_table .dropdown-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: auto;
+        z-index: 9999;
+        margin-top: 2px;
+        min-width: 160px;
+        background-color: #fff;
+        border: 1px solid rgba(0,0,0,.15);
+        border-radius: 4px;
+        box-shadow: 0 6px 12px rgba(0,0,0,.175);
+        background-clip: padding-box;
+        display: none;
+    }
+
+    #sell_table .btn-group.open .dropdown-menu {
+        display: block;
+    }
+
+    /* Fixed table layout */
+    #sell_table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    /* Date column */
+    #sell_table th:nth-child(1),
+    #sell_table td:nth-child(1) {
+        width: 100px;
+        min-width: 100px;
+    }
+
+    /* Ref No column */
+    #sell_table th:nth-child(2),
+    #sell_table td:nth-child(2) {
+        width: 130px;
+        min-width: 130px;
+    }
+
+    /* Customer Name column */
+    #sell_table th:nth-child(3),
+    #sell_table td:nth-child(3) {
+        width: 180px;
+        min-width: 180px;
+    }
+
+    /* Contact No column */
+    #sell_table th:nth-child(4),
+    #sell_table td:nth-child(4) {
+        width: 120px;
+        min-width: 120px;
+    }
+
+    /* Location column */
+    #sell_table th:nth-child(5),
+    #sell_table td:nth-child(5) {
+        width: 110px;
+        min-width: 110px;
+    }
+
+    /* Total Items column */
+    #sell_table th:nth-child(6),
+    #sell_table td:nth-child(6) {
+        width: 90px;
+        min-width: 90px;
+        text-align: right;
+    }
+
+    /* Total Amount column */
+    #sell_table th:nth-child(7),
+    #sell_table td:nth-child(7) {
+        width: 130px;
+        min-width: 130px;
+        text-align: right;
+    }
+
+    /* Added By column */
+    #sell_table th:nth-child(8),
+    #sell_table td:nth-child(8) {
+        width: 120px;
+        min-width: 120px;
+    }
+
+    /* Action column (last) */
+    #sell_table th:last-child,
+    #sell_table td:last-child {
+        width: 120px;
+        min-width: 120px;
+        max-width: 120px;
+        overflow: visible !important;
+        white-space: nowrap !important;
+        text-overflow: clip !important;
+    }
+
+    /* Truncate non-action cells */
+    #sell_table td:not(:last-child) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 8px 4px;
+    }
+
+    #sell_table td {
+        padding: 8px 4px;
+    }
+
+    #sell_table td:last-child {
+        overflow: visible;
+        white-space: nowrap;
+        text-overflow: initial;
+    }
+
+    #sell_table .btn {
+        display: inline-block;
+        margin-bottom: 0;
+        font-weight: normal;
+        text-align: center;
+        vertical-align: middle;
+        cursor: pointer;
+        background-image: none;
+        border: 1px solid transparent;
+        white-space: nowrap;
+        padding: 6px 12px;
+        font-size: 14px;
+        line-height: 1.42857143;
+        border-radius: 4px;
+    }
+
+    #sell_table .btn-info {
+        color: #fff;
+        background-color: #5bc0de;
+        border-color: #46b8da;
+    }
+
+    #sell_table .btn-xs {
+        padding: 1px 5px;
+        font-size: 12px;
+        line-height: 1.5;
+        border-radius: 3px;
+    }
+
+    /* Ensure table wrapper allows dropdown overflow */
+    #sell_table_wrapper {
+        position: relative;
+        overflow: visible;
+    }
+
+    .dataTables_wrapper {
+        overflow: visible;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+        overflow-y: visible;
+        min-height: 400px;
+    }
+
+    /* Loading overlay */
     .table-loading-overlay {
         position: absolute;
         top: 0;
@@ -33,27 +198,127 @@
         justify-content: center;
         flex-direction: column;
     }
-    
+
     .table-loading-overlay .loading-spinner {
         border: 4px solid #f3f3f3;
-        border-top: 4px solid #2196F3;
+        border-top: 4px solid #3498db;
         border-radius: 50%;
         width: 40px;
         height: 40px;
         animation: spin 1s linear infinite;
         margin-bottom: 10px;
     }
-    
+
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
-    
-    #sell_table_wrapper {
-        position: relative;
+
+    /* Highlight newly created record */
+    .highlight-new-record {
+        background-color: #ffebee !important;
+        border: 2px solid #f44336 !important;
+        animation: pulse-highlight 2s ease-in-out;
+    }
+
+    @keyframes pulse-highlight {
+        0% { background-color: #ffcdd2; }
+        50% { background-color: #ef5350; }
+        100% { background-color: #ffebee; }
+    }
+
+    /* Highlight newly created tax invoice */
+    .highlight-new-tax-invoice {
+        background-color: #ffebee !important;
+        border: 2px solid #f44336 !important;
+        animation: pulse-highlight-red 3s ease-in-out;
+    }
+
+    @keyframes pulse-highlight-red {
+        0% { background-color: #ffcdd2; }
+        25% { background-color: #ef5350; }
+        50% { background-color: #f44336; }
+        75% { background-color: #ef5350; }
+        100% { background-color: #ffebee; }
+    }
+
+    /* Modal styling */
+    .payment_modal .modal-body {
+        padding: 20px;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .payment_modal .modal-dialog {
+        width: 90%;
+        max-width: 1000px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 40px);
+    }
+    .payment_modal .modal-content {
+        border-radius: 6px;
+        box-shadow: 0 5px 15px rgba(0,0,0,.5);
+    }
+    .payment_modal .modal-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #e5e5e5;
+        background-color: #f5f5f5;
+    }
+    .payment_modal .modal-header .modal-title {
+        font-size: 18px;
+        font-weight: 500;
+    }
+    .payment_modal .modal-footer {
+        padding: 15px 20px;
+        text-align: right;
+        border-top: 1px solid #e5e5e5;
+        background-color: #f5f5f5;
+    }
+
+    .view_modal .modal-dialog,
+    .view_modal .modal-dialog.modal-xl {
+        width: 98%;
+        max-width: 1400px;
+        margin: 80px auto;
+    }
+
+    .modal-content {
+        border: none !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2) !important;
+    }
+
+    .modal-header {
+        border-bottom: none !important;
+    }
+
+    .modal-footer {
+        border-top: 1px solid #e9ecef !important;
+    }
+
+    .modal.fade .modal-dialog {
+        transition: transform 0.3s ease-out;
+        transform: translate(0, -50px);
+    }
+
+    .modal.show .modal-dialog {
+        transform: none;
+    }
+
+    @media print {
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        @page { margin: 10mm; }
+        body.modal-printing > *:not(#modal-print-container) { display: none !important; }
+        body.modal-printing #modal-print-container { display: block !important; }
+        body.modal-printing #modal-print-container .modal-header { display: none !important; }
+        body.modal-printing #modal-print-container .modal-footer { display: none !important; }
+        body.modal-printing #modal-print-container .no-print { display: none !important; }
+        body.modal-printing #modal-print-container .modal-dialog { margin: 0 !important; max-width: 100% !important; width: 100% !important; box-shadow: none !important; transform: none !important; }
+        body.modal-printing #modal-print-container .modal-content { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
     }
 </style>
-@endpush
+@endsection
 
 @section('content')
 
@@ -122,6 +387,7 @@
                             <th>@lang('lang_v1.contact_no')</th>
                             <th>@lang('sale.location')</th>
                             <th>@lang('lang_v1.total_items')</th>
+                            <th>Total Amount</th>
                             <th>@lang('lang_v1.added_by')</th>
                             <th>@lang('messages.action')</th>
                         </tr>
@@ -132,37 +398,6 @@
     @endcomponent
 </section>
 <!-- /.content -->
- 
-    <!-- Create Tax-Invoice Modal -->
-    <div class="modal fade border-radius: 86px;" id="createTaxInvoiceModal" tabindex="-1" role="dialog" aria-labelledby="createTaxInvoiceModalLabel">
-        <div class="modal-dialog border-radius: 86px;" style="max-width: 500px; margin: 50px auto; display : flex; align-items: center; justify-content: center; min-height: calc(100vh - 100px); border-radius: 86px;">
-            <div class="modal-content" style="border-radius: 86px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); border: none; width: 100%; background: white;">
-                <div class="modal-header" style="background: white; border-bottom: none; padding: 30px 30px 0 30px; position: relative;">
-                    <button type="button" class="close" data-dismiss="modal" style="position: absolute; top: 20px; right: 20px; color: #999; opacity: 0.6; font-size: 24px; background: none; border: none; font-weight: 300;">
-                        <span aria-hidden="true">×</span>
-                    </button>
-                </div>
-                <div class="modal-body" style="padding: 20px 40px 40px 40px; text-align: center; background: white;">
-                    <h4 style="color: #333; font-weight: 600; margin-bottom: 20px; font-size: 24px; line-height: 1.3;">
-                        Are you sure?
-                    </h4>
-                    <p style="color: #666; margin-bottom: 40px; font-size: 16px; line-height: 1.5; font-weight: 400;">
-                        Are you sure you want to create a Tax-Invoice (Proforma) from this quotation? This action will convert your quotation.
-                    </p>
-                    
-                    <div style="display: flex; gap: 15px; justify-content: center;">
-                        <button type="button" class="btn confirm-create-tax-invoice" style="padding: 12px 30px; border-radius: 8px; font-size: 16px; font-weight: 500; background: #e91e63; border: 2px solid #e91e63; color: white; min-width: 120px;">
-                            Create
-                        </button>
-                        <button type="button" class="btn" data-dismiss="modal" style="padding: 12px 30px; border-radius: 8px; font-size: 16px; font-weight: 500; background: white; border: 2px solid #ddd; color: #666; min-width: 120px;">
-                            Cancel
-                        </button>
-                      
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 @stop
 @section('javascript')
 <script src="{{ asset('js/pdf-loader.js') }}"></script>
@@ -206,52 +441,6 @@ $(document).ready( function(){
         sell_table.ajax.reload();
     });
 
-    // Handle confirm create tax invoice button click
-    $(document).on('click', '.confirm-create-tax-invoice', function(e) {
-        e.preventDefault();
-        
-        var quotationId = window.pendingTaxInvoiceQuotationId;
-        
-        if (!quotationId) {
-            toastr.error('Quotation ID not found');
-            return;
-        }
-        
-        // Close modal
-        $('#createTaxInvoiceModal').modal('hide');
-        
-        // Execute the creation
-        setTimeout(function() {
-            executeCreateTaxInvoice(quotationId);
-        }, 300); // Small delay for smooth modal transition
-    });
-
-    // Handle modal Create Tax-Invoice button click
-    $(document).on('click', '.modal-create-tax-invoice-btn', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        var quotationId = $(this).data('quotation-id');
-        
-        console.log('Modal Create Tax-Invoice button clicked:', quotationId);
-        
-        if (!quotationId) {
-            toastr.error('Quotation ID not found');
-            return;
-        }
-        
-        // Close the quotation details modal first
-        $('.view_modal').modal('hide');
-        
-        // Store quotation ID for later use
-        window.pendingTaxInvoiceQuotationId = quotationId;
-        
-        // Show the Create Tax-Invoice confirmation modal
-        setTimeout(function() {
-            $('#createTaxInvoiceModal').modal('show');
-        }, 300); // Small delay for smooth modal transition
-    });
-    
     sell_table = $('#sell_table').DataTable({
         processing: true,
         serverSide: true,
@@ -300,7 +489,7 @@ $(document).ready( function(){
             }
         },
         columnDefs: [ {
-            "targets": 7,
+            "targets": 8,
             "orderable": false,
             "searchable": false
         } ],
@@ -311,11 +500,12 @@ $(document).ready( function(){
             { data: 'mobile', name: 'contacts.mobile'},
             { data: 'business_location', name: 'bl.name'},
             { data: 'total_items', name: 'total_items', "searchable": false},
+            { data: 'final_total', name: 'transactions.final_total', "searchable": false},
             { data: 'added_by', name: 'added_by'},
             { data: 'action', name: 'action'}
         ],
         "fnDrawCallback": function (oSettings) {
-            __currency_convert_recursively($('#purchase_table'));
+            __currency_convert_recursively($('#sell_table'));
         },
         createdRow: function(row, data, dataIndex) {
             // Add data-href attribute for row clicking
@@ -331,159 +521,27 @@ $(document).ready( function(){
         sell_table.ajax.reload();
     });
 
-    // Row click to view quotation in modal
+    // Row click to view quotation in modal - use standard modal loading
     $(document).off('click', 'table#sell_table tbody tr').on('click', 'table#sell_table tbody tr', function(e) {
         // Don't trigger if clicking on action buttons, dropdowns, links
         if ($(e.target).closest('a, button, .dropdown, .btn-group').length) {
             return;
         }
-        
+
         var href = $(this).data('href');
-        var quotationId = $(this).find('td:eq(1)').text().trim(); // Get quotation ref from 2nd column
-        
-        console.log('Row clicked, href:', href, 'quotationId:', quotationId);
-        
+
         if (href) {
-            // Ensure clean modal state
-            $('.modal').modal('hide');
-            $('.modal-backdrop').remove();
-            $('body').removeClass('modal-open').css('padding-right', '');
-            
-            // Show loading modal
-            $('.view_modal').html(`
-                <div class="modal-dialog modal-xl" style="width: 95%; max-width: 1200px;">
-                    <div class="modal-content" style="border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px 8px 0 0; padding: 20px; border-bottom: none;">
-                            <h4 class="modal-title" style="font-size: 20px; font-weight: 600; margin: 0;">
-                                <i class="fa fa-spinner fa-spin"></i> Loading Quotation Details...
-                            </h4>
-                            <button type="button" class="close" data-dismiss="modal" style="color: white; opacity: 0.8; font-size: 28px; background: none; border: none;">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                        <div class="modal-body text-center" style="padding: 50px; background-color: #f8f9fa;">
-                            <div class="loading-spinner">
-                                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-                                    <span class="sr-only">Loading...</span>
-                                </div>
-                            </div>
-                            <p class="mt-3 text-muted">Please wait while we load the quotation details...</p>
-                        </div>
-                    </div>
-                </div>
-            `).modal('show');
-            
-            console.log('Loading quotation from:', href);
-            
-            // Load quotation details
+            // Load content directly into view_modal using standard approach
             $.ajax({
                 method: 'GET',
                 url: href,
                 dataType: 'html',
-                timeout: 15000,
                 success: function(result) {
-                    console.log('Quotation data loaded successfully');
-                    
-                    // Extract the main content from the response
-                    var $result = $(result);
-                    var content = $result.find('.content-wrapper, .content, .box-body').first().html();
-                    if (!content) {
-                        content = result; // fallback to full response
-                    }
-                    
-                    // Remove any existing buttons from content to avoid duplicates
-                    var cleanContent = content;
-                    
-                    // Remove close buttons
-                    cleanContent = cleanContent.replace(/<button[^>]*class="[^"]*close[^"]*"[^>]*>.*?<\/button>/gi, '');
-                    cleanContent = cleanContent.replace(/<a[^>]*class="[^"]*close[^"]*"[^>]*>.*?<\/a>/gi, '');
-                    
-                    // Remove print buttons and other action buttons
-                    cleanContent = cleanContent.replace(/<button[^>]*print[^>]*>.*?<\/button>/gi, '');
-                    cleanContent = cleanContent.replace(/<a[^>]*print[^>]*>.*?<\/a>/gi, '');
-                    cleanContent = cleanContent.replace(/<button[^>]*Print[^>]*>.*?<\/button>/gi, '');
-                    cleanContent = cleanContent.replace(/<a[^>]*Print[^>]*>.*?<\/a>/gi, '');
-                    
-                    // Remove any button containing action words
-                    cleanContent = cleanContent.replace(/<button[^>]*>(.*?)(Create|Edit|Delete|Print|Save)(.*?)<\/button>/gi, '');
-                    cleanContent = cleanContent.replace(/<a[^>]*>(.*?)(Create|Edit|Delete|Print|Save)(.*?)<\/a>/gi, '');
-                    
-                    // Remove entire footer sections that might contain buttons
-                    cleanContent = cleanContent.replace(/<div[^>]*class="[^"]*modal-footer[^"]*"[^>]*>.*?<\/div>/gi, '');
-                    cleanContent = cleanContent.replace(/<footer[^>]*>.*?<\/footer>/gi, '');
-                    
-                    // Extract quotation ID from the content or URL
-                    var quotationIdFromUrl = href.split('/').pop();
-                    
-                    // Create modal with Create Tax-Invoice button in footer
-                    var modalHtml = `
-                        <div class="modal-dialog modal-xl" style="width: 95%; max-width: 1200px;">
-                            <div class="modal-content" style="border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-                                <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px 8px 0 0; padding: 20px; border-bottom: none;">
-                                    <h4 class="modal-title" style="font-size: 20px; font-weight: 600; margin: 0;">
-                                        <i class="fa fa-file-text"></i> Quotation Details
-                                    </h4>
-                                    <button type="button" class="close" data-dismiss="modal" style="color: white; opacity: 0.8; font-size: 28px; background: none; border: none;">
-                                        <span aria-hidden="true">&times;</span>
-                                    </button>
-                                </div>
-                                <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding: 30px; background-color: #f8f9fa;">
-                                    <div style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                                        ${cleanContent}
-                                    </div>
-                                </div>
-                                <div class="modal-footer" style="background-color: #f8f9fa; border-top: 1px solid #e9ecef; border-radius: 0 0 8px 8px; padding: 20px; display: flex; justify-content: flex-end; align-items: center; gap: 10px;">
-                                    <button type="button" class="btn btn-warning modal-create-tax-invoice-btn" 
-                                            data-quotation-id="${quotationIdFromUrl}"
-                                            style="padding: 10px 20px; border-radius: 5px; font-weight: 500;">
-                                        <i class="fa fa-file-invoice"></i> Create Tax-Invoice (Proforma)
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" data-dismiss="modal" style="padding: 10px 25px; border-radius: 5px;">
-                                        <i class="fa fa-times"></i> Close
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Replace modal content
-                    $('.view_modal').html(modalHtml);
-                    
-                    // Apply currency conversion to the modal content
+                    $('.view_modal').html(result).modal('show');
                     __currency_convert_recursively($('.view_modal'));
                 },
                 error: function(xhr, status, error) {
-                    console.error('Failed to load quotation:', error);
-                    
-                    var errorHtml = `
-                        <div class="modal-dialog modal-lg" style="width: 90%; max-width: 800px;">
-                            <div class="modal-content" style="border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-                                <div class="modal-header" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; border-radius: 8px 8px 0 0; padding: 20px;">
-                                    <h4 class="modal-title" style="font-size: 20px; font-weight: 600; margin: 0;">
-                                        <i class="fa fa-exclamation-triangle"></i> Error Loading Quotation
-                                    </h4>
-                                    <button type="button" class="close" data-dismiss="modal" style="color: white; opacity: 0.8; font-size: 28px;">
-                                        <span>&times;</span>
-                                    </button>
-                                </div>
-                                <div class="modal-body text-center" style="padding: 50px 40px; background-color: #f8f9fa;">
-                                    <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                                        <i class="fas fa-exclamation-triangle fa-4x text-warning" style="margin-bottom: 20px;"></i>
-                                        <h5 style="color: #666; font-weight: 600; margin-bottom: 15px;">Failed to load quotation details</h5>
-                                        <p class="text-muted">Error: ${error}</p>
-                                        <p class="text-muted">Status: ${xhr.status}</p>
-                                    </div>
-                                </div>
-                                <div class="modal-footer" style="background-color: #f8f9fa; border-top: 1px solid #e9ecef; border-radius: 0 0 8px 8px; padding: 20px;">
-                                    <button type="button" class="btn btn-secondary" data-dismiss="modal" style="padding: 10px 25px; border-radius: 5px;">
-                                        <i class="fa fa-times"></i> Close
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    
-                    $('.view_modal').html(errorHtml);
+                    toastr.error('Failed to load quotation details');
                 }
             });
         }
@@ -579,12 +637,22 @@ function createBillingReceive(id) {
 // Function to create Tax-Invoice (Proforma) from quotation
 function createTaxInvoice(id) {
     console.log('createTaxInvoice called with ID:', id);
-    
-    // Store quotation ID for later use
-    window.pendingTaxInvoiceQuotationId = id;
-    
-    // Show styled modal instead of confirm dialog
-    $('#createTaxInvoiceModal').modal('show');
+
+    // Close the view modal first
+    $('.view_modal').modal('hide');
+
+    // Use swal confirmation
+    swal({
+        title: 'Are you sure?',
+        text: 'Are you sure you want to create a Tax-Invoice (Proforma) from this quotation?',
+        icon: 'warning',
+        buttons: true,
+        dangerMode: false,
+    }).then(confirm => {
+        if (confirm) {
+            executeCreateTaxInvoice(id);
+        }
+    });
 }
 
 // Functions to manage tax invoice highlighting with localStorage

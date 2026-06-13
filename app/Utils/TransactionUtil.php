@@ -1081,11 +1081,11 @@ class TransactionUtil extends Util
         //Shop Contact Info
         $output['contact'] = '';
         if ($il->show_mobile_number == 1 && ! empty($location_details->mobile)) {
-            $output['contact'] .= '<b>'.__('contact.mobile').':</b> '.$location_details->mobile;
+            $output['contact'] .= '<b>เบอร์โทรศัพท์:</b> '.$location_details->mobile;
         }
         if ($il->show_alternate_number == 1 && ! empty($location_details->alternate_number)) {
             if (empty($output['contact'])) {
-                $output['contact'] .= __('contact.mobile').': '.$location_details->alternate_number;
+                $output['contact'] .= 'เบอร์โทรศัพท์: '.$location_details->alternate_number;
             } else {
                 $output['contact'] .= ', '.$location_details->alternate_number;
             }
@@ -1114,7 +1114,7 @@ class TransactionUtil extends Util
                 if (! empty($customer->contact_address)) {
                     $output['customer_info'] .= '<br>';
                 }
-                $output['customer_info'] .= '<b>'.__('contact.mobile').'</b>: '.$customer->mobile;
+                $output['customer_info'] .= '<b>เบอร์โทรศัพท์:</b> '.$customer->mobile;
                 if (! empty($customer->landline)) {
                     $output['customer_info'] .= ', '.$customer->landline;
                 }
@@ -1226,9 +1226,34 @@ class TransactionUtil extends Util
         }
 
         //Invoice info
+        $output['sale_number'] = $transaction->id;
         $output['invoice_no'] = $transaction->invoice_no;
         $output['invoice_no_prefix'] = $il->invoice_no_prefix;
         $output['shipping_address'] = ! empty($transaction->shipping_address()) ? $transaction->shipping_address() : $transaction->shipping_address;
+        $output['sales_support_user'] = '';
+        try {
+            $activity_user = DB::table('activity_log as al')
+                ->leftJoin('users as u', 'u.id', '=', 'al.causer_id')
+                ->where('al.subject_type', Transaction::class)
+                ->where('al.subject_id', $transaction->id)
+                ->whereNotNull('al.causer_id')
+                ->orderByDesc('al.id')
+                ->select('u.surname', 'u.first_name', 'u.last_name')
+                ->first();
+
+            if (! empty($activity_user)) {
+                $output['sales_support_user'] = trim(collect([
+                    $activity_user->surname ?? '',
+                    $activity_user->first_name ?? '',
+                    $activity_user->last_name ?? '',
+                ])->filter()->implode(' '));
+            }
+        } catch (\Throwable $e) {
+            // Keep receipt rendering even if activity log lookup fails.
+        }
+        if (empty($output['sales_support_user']) && ! empty($transaction->sales_person->user_full_name)) {
+            $output['sales_support_user'] = $transaction->sales_person->user_full_name;
+        }
 
         //Heading & invoice label, when quotation use the quotation heading.
         if ($transaction_type == 'sell_return') {
@@ -1452,7 +1477,7 @@ class TransactionUtil extends Util
         $output['tax_label'] .= ':';
         $output['tax'] = ($transaction->tax_amount != 0) ? $this->num_f($transaction->tax_amount, $show_currency, $business_details) : 0;
 
-        if ($transaction->tax_amount != 0 && $tax->is_tax_group) {
+        if ($transaction->tax_amount != 0 && ! empty($tax) && $tax->is_tax_group) {
             $transaction_group_tax_details = $this->groupTaxDetails($tax, $transaction->tax_amount);
 
             $output['group_tax_details'] = [];
@@ -1589,11 +1614,10 @@ class TransactionUtil extends Util
         $output['footer_text'] = $invoice_layout->footer_text;
 
         //Barcode related information.
-        $output['show_barcode'] = ! empty($il->show_barcode) ? true : false;
+        $output['show_barcode'] = true;
 
         if (in_array($transaction_type, ['sell', 'sales_order'])) {
-            //Qr code related information.
-            $output['show_qr_code'] = ! empty($il->show_qr_code) ? true : false;
+            $output['show_qr_code'] = true;
 
             $zatca_qr = ! empty($il->common_settings['zatca_qr']) ? true : false;
 
@@ -1601,55 +1625,12 @@ class TransactionUtil extends Util
                 $total_order_tax = $transaction->tax_amount + $total_line_taxes;
                 $qr_code_text = $this->_zatca_qr_text($business_details->name, $business_details->tax_number_1, $transaction->transaction_date, $transaction->final_total, $total_order_tax);
             } else {
-                $is_label_enabled = ! empty($il->common_settings['show_qr_code_label']) ? true : false;
-                $qr_code_details = [];
-                $qr_code_fields = ! empty($il->qr_code_fields) ? $il->qr_code_fields : [];
-
-                if (in_array('business_name', $qr_code_fields)) {
-                    $qr_code_details[] = $is_label_enabled ? __('business.business').': '.$business_details->name : $business_details->name;
-                }
-                if (in_array('address', $qr_code_fields)) {
-                    $qr_code_details[] = $is_label_enabled ? __('business.address').': '.$location_details->name.', '.$output['address'] : $location_details->name.' '.str_replace(',', '', $output['address']);
-                }
-                if (in_array('tax_1', $qr_code_fields)) {
-                    $qr_code_details[] = $is_label_enabled ? $business_details->tax_label_1.': '.$business_details->tax_number_1 : $business_details->tax_number_1;
-                }
-                if (in_array('tax_2', $qr_code_fields)) {
-                    $qr_code_details[] = $is_label_enabled ? $business_details->tax_label_2.' '.$business_details->tax_number_2 : $business_details->tax_number_2;
-                }
-                if (in_array('invoice_no', $qr_code_fields)) {
-                    $qr_code_details[] = $is_label_enabled ? $il->invoice_no_prefix.': '.$transaction->invoice_no : $transaction->invoice_no;
-                }
-                if (in_array('invoice_datetime', $qr_code_fields)) {
-                    $qr_code_details[] = $is_label_enabled ? $output['date_label'].': '.$output['invoice_date'] : $output['invoice_date'];
-                }
-                if (in_array('subtotal', $qr_code_fields)) {
-                    $qr_code_details[] = $is_label_enabled ? $output['subtotal_label'].' '.$output['subtotal'] : $output['subtotal'];
-                }
-                if (in_array('total_amount', $qr_code_fields)) {
-                    $qr_code_details[] = $is_label_enabled ? $output['total_label'].' '.$output['total'] : $output['total'];
-                }
-                if (in_array('total_tax', $qr_code_fields)) {
-                    $total_order_tax = $transaction->tax_amount + $total_line_taxes;
-                    $total_order_tax_formatted = $this->num_f($total_order_tax, $show_currency, $business_details);
-                    $qr_code_details[] = $is_label_enabled ? __('sale.tax').': '.$total_order_tax_formatted : $total_order_tax_formatted;
-                }
-                if (in_array('customer_name', $qr_code_fields)) {
-                    $cust_label = $il->customer_label ?? __('contact.customer');
-                    $qr_code_details[] = $is_label_enabled ? $cust_label.': '.$customer->full_name : $customer->full_name;
-                }
-                if (in_array('invoice_url', $qr_code_fields)) {
-                    $qr_code_details[] = $this->getInvoiceUrl($transaction->id, $business_details->id);
-                }
-
-                $output['qr_code_details'] = $qr_code_details;
-
-                $qr_code_text = $is_label_enabled ? implode(', ', $qr_code_details) : implode(' ', $qr_code_details);
+                // Use invoice ref number directly for QR code
+                $qr_code_text = $transaction->invoice_no;
+                $output['qr_code_details'] = [];
             }
 
-            if ($transaction->status == 'final') {
-                $output['qr_code_text'] = $qr_code_text;
-            }
+            $output['qr_code_text'] = $qr_code_text;
         }
         //Module related information.
         $il->module_info = ! empty($il->module_info) ? json_decode($il->module_info, true) : [];
@@ -2375,23 +2356,21 @@ class TransactionUtil extends Util
             $scheme->save();
         }
 
-        // Check database for latest invoice number of this document type with current year prefix
+        // Check database for the highest invoice number of this document type with current year prefix
         $latest_invoice = $this->getLatestInvoiceByDocumentType($business_id, $document_type, $current_prefix);
 
-        $next_number = 1; // Default start number
-
+        // Find the highest existing number from the database
+        $highest_number = 0;
         if ($latest_invoice) {
-            // Database has invoices for current year - use latest + 1
-            $latest_number = $this->extractNumberFromInvoice($latest_invoice, $current_prefix);
-            $next_number = $latest_number + 1;
-
-            \Log::info("Database found latest {$document_type} for {$current_year}: {$latest_invoice}, using next: {$next_number}");
-        } else {
-            // No existing invoices in database for current year - use start_number + 1 (next available number)
-            $next_number = $scheme->start_number + 1;
-
-            \Log::info("No database {$document_type} found for {$current_year}, using start_number + 1: {$scheme->start_number} + 1 = {$next_number}");
+            $highest_number = $this->extractNumberFromInvoice($latest_invoice, $current_prefix);
+            \Log::info("Database found highest {$document_type} for {$current_year}: {$latest_invoice} (number: {$highest_number})");
         }
+
+        // Next number = max(highest existing number, start_number) + 1
+        // This ensures we always continue from the highest value
+        $next_number = max($highest_number, $scheme->start_number) + 1;
+
+        \Log::info("Next {$document_type} number: max(db:{$highest_number}, start:{$scheme->start_number}) + 1 = {$next_number}");
 
         // Update the invoice scheme count to reflect what was actually used
         // Count represents how many numbers have been used beyond start_number
@@ -2434,10 +2413,13 @@ class TransactionUtil extends Util
      */
     private function getLatestInvoiceByDocumentType($business_id, $document_type, $prefix)
     {
+        $prefix_length = strlen($prefix);
+
+        // Order by the actual numeric value extracted from the invoice number (not by ID)
+        // so we always find the highest invoice number, even if IDs are out of order
         $latest_transaction = Transaction::where('business_id', $business_id)
-            ->where('document_type', $document_type)
             ->where('invoice_no', 'LIKE', $prefix . '%')
-            ->orderBy('id', 'desc')
+            ->orderByRaw('CAST(SUBSTRING(invoice_no, ? + 1) AS UNSIGNED) DESC', [$prefix_length])
             ->first();
 
         return $latest_transaction ? $latest_transaction->invoice_no : null;
@@ -3322,11 +3304,29 @@ class TransactionUtil extends Util
             return false;
         }
 
+        $debugTraceId = $business['debug_trace_id'] ?? null;
+        $isPosBillDebugEnabled = $this->isPosBillDebugEnabled();
+
         if (! empty($business['pos_settings']) && ! is_array($business['pos_settings'])) {
             $business['pos_settings'] = json_decode($business['pos_settings'], true);
         }
         $allow_overselling = ! empty($business['pos_settings']['allow_overselling']) ?
                             true : false;
+
+        if ($isPosBillDebugEnabled) {
+            $this->logMapPurchaseSellDebug('map_purchase_sell_init', [
+                'trace_id' => $debugTraceId,
+                'mapping_type' => $mapping_type,
+                'business_id' => $business['id'] ?? null,
+                'location_id' => $business['location_id'] ?? null,
+                'transaction_lines_count' => (is_array($transaction_lines) || $transaction_lines instanceof \Countable)
+                    ? count($transaction_lines)
+                    : null,
+                'check_expiry' => $check_expiry,
+                'purchase_line_id' => $purchase_line_id,
+                'allow_overselling' => $allow_overselling,
+            ]);
+        }
 
         //Set flag to check for expired items during SELLING only.
         $stop_selling_expired = false;
@@ -3398,8 +3398,22 @@ class TransactionUtil extends Util
 
             $purchase_sell_map = [];
 
+            if ($isPosBillDebugEnabled) {
+                $this->logMapPurchaseSellDebug('map_purchase_sell_line_start', [
+                    'trace_id' => $debugTraceId,
+                    'mapping_type' => $mapping_type,
+                    'sell_line_id' => $line->id ?? null,
+                    'transaction_id' => $line->transaction_id ?? null,
+                    'product_id' => $line->product_id ?? null,
+                    'variation_id' => $line->variation_id ?? null,
+                    'requested_qty' => $line->quantity ?? null,
+                    'lot_no_line_id' => $line->lot_no_line_id ?? null,
+                ]);
+            }
+
             //Iterate over the rows, assign the purchase line to sell lines.
             $qty_selling = $line->quantity;
+            $allocations = [];
             foreach ($rows as $k => $row) {
                 $qty_allocated = 0;
 
@@ -3457,9 +3471,36 @@ class TransactionUtil extends Util
                     }
                 }
 
+                if ($isPosBillDebugEnabled && $qty_allocated != 0) {
+                    $allocations[] = [
+                        'purchase_line_id' => (int) $row->purchase_lines_id,
+                        'qty_allocated' => (float) $qty_allocated,
+                        'qty_available_before_allocate' => (float) $row->quantity_available,
+                        'invoice_no' => $row->invoice_no,
+                    ];
+                }
+
                 if ($qty_selling == 0) {
                     break;
                 }
+            }
+
+            if ($isPosBillDebugEnabled) {
+                $this->logMapPurchaseSellDebug('map_purchase_sell_line_allocated', [
+                    'trace_id' => $debugTraceId,
+                    'mapping_type' => $mapping_type,
+                    'sell_line_id' => $line->id ?? null,
+                    'requested_qty' => $line->quantity ?? null,
+                    'remaining_qty' => $qty_selling,
+                    'matching_purchase_rows' => collect($rows)->map(function ($row) {
+                        return [
+                            'purchase_line_id' => (int) $row->purchase_lines_id,
+                            'quantity_available' => (float) $row->quantity_available,
+                            'invoice_no' => $row->invoice_no,
+                        ];
+                    })->take(25)->values()->all(),
+                    'allocations' => $allocations,
+                ]);
             }
 
             if (! ($qty_selling == 0 || is_null($qty_selling))) {
@@ -3498,6 +3539,36 @@ class TransactionUtil extends Util
                     $business_name = optional(Business::find($business['id']))->name;
                     $location_name = optional(BusinessLocation::find($business['location_id']))->name;
                     \Log::emergency($mismatch_error.' Business: '.$business_name.' Location: '.$location_name);
+                    if ($isPosBillDebugEnabled) {
+                        $this->logMapPurchaseSellDebug('map_purchase_sell_mismatch', [
+                            'trace_id' => $debugTraceId,
+                            'mapping_type' => $mapping_type,
+                            'sell_line_id' => $line->id ?? null,
+                            'transaction_id' => $line->transaction_id ?? null,
+                            'product_id' => $line->product_id ?? null,
+                            'variation_id' => $line->variation_id ?? null,
+                            'requested_qty' => $line->quantity ?? null,
+                            'remaining_unmapped_qty' => $qty_selling,
+                            'allow_overselling' => $allow_overselling,
+                            'available_purchase_rows' => collect($rows)->map(function ($row) {
+                                return [
+                                    'purchase_line_id' => (int) $row->purchase_lines_id,
+                                    'quantity_available' => (float) $row->quantity_available,
+                                    'qty_sold' => (float) $row->quantity_sold,
+                                    'qty_adjusted' => (float) $row->quantity_adjusted,
+                                    'qty_returned' => (float) $row->quantity_returned,
+                                    'mfg_qty_used' => (float) $row->mfg_quantity_used,
+                                    'invoice_no' => $row->invoice_no,
+                                ];
+                            })->take(25)->values()->all(),
+                            'computed_available_purchase_lines' => $this->getAvailablePurchaseLinesForDebug(
+                                (int) $business['id'],
+                                (int) $business['location_id'],
+                                (int) $line->product_id,
+                                (int) $line->variation_id
+                            ),
+                        ], 'error');
+                    }
                     throw new PurchaseSellMismatch($mismatch_error);
                 } else {
                     //Mapping with no purchase line
@@ -3518,6 +3589,72 @@ class TransactionUtil extends Util
                 TransactionSellLinesPurchaseLines::insert($purchase_sell_map);
             }
         }
+    }
+
+    public function getAvailablePurchaseLinesForDebug(int $businessId, int $locationId, int $productId, int $variationId): array
+    {
+        if ($businessId <= 0 || $locationId <= 0 || $productId <= 0 || $variationId <= 0) {
+            return [];
+        }
+
+        $qtySumQuery = $this->get_pl_quantity_sum_string('PL');
+
+        return Transaction::join('purchase_lines AS PL', 'transactions.id', '=', 'PL.transaction_id')
+            ->where('transactions.business_id', $businessId)
+            ->where('transactions.location_id', $locationId)
+            ->whereIn('transactions.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase'])
+            ->where('transactions.status', 'received')
+            ->where('PL.product_id', $productId)
+            ->where('PL.variation_id', $variationId)
+            ->select(
+                'PL.id as purchase_line_id',
+                'transactions.id as purchase_transaction_id',
+                'transactions.invoice_no',
+                'transactions.transaction_date',
+                'PL.quantity',
+                'PL.quantity_sold',
+                'PL.quantity_adjusted',
+                'PL.quantity_returned',
+                'PL.mfg_quantity_used',
+                DB::raw("(PL.quantity - ($qtySumQuery)) as quantity_available")
+            )
+            ->orderBy('transactions.transaction_date', 'asc')
+            ->take(50)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'purchase_line_id' => (int) $row->purchase_line_id,
+                    'purchase_transaction_id' => (int) $row->purchase_transaction_id,
+                    'invoice_no' => $row->invoice_no,
+                    'transaction_date' => $row->transaction_date,
+                    'quantity' => (float) $row->quantity,
+                    'quantity_sold' => (float) $row->quantity_sold,
+                    'quantity_adjusted' => (float) $row->quantity_adjusted,
+                    'quantity_returned' => (float) $row->quantity_returned,
+                    'mfg_quantity_used' => (float) $row->mfg_quantity_used,
+                    'quantity_available' => (float) $row->quantity_available,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function isPosBillDebugEnabled(): bool
+    {
+        return filter_var(env('POS_BILL_DEBUG', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function logMapPurchaseSellDebug(string $event, array $context = [], string $level = 'info'): void
+    {
+        if (!$this->isPosBillDebugEnabled()) {
+            return;
+        }
+
+        if (!method_exists(\Log::class, $level)) {
+            $level = 'info';
+        }
+
+        \Log::{$level}('[POS_BILL_DEBUG][MAP_PURCHASE_SELL] ' . $event, $context);
     }
 
     /**
@@ -4371,6 +4508,10 @@ class TransactionUtil extends Util
      */
     public function recalculateSellLineTotals($business_id, $sell_line)
     {
+        if (empty($sell_line->product)) {
+            return $sell_line;
+        }
+
         $unit_details = $this->getSubUnits($business_id, $sell_line->product->unit->id);
 
         $sub_unit = null;

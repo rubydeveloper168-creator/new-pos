@@ -133,9 +133,9 @@
 										<i class="fa fa-user"></i>
 									</span>
 									<input type="hidden" id="default_customer_id" 
-									value="{{ $walk_in_customer['id']}}" >
+									value="{{ data_get($walk_in_customer, 'id', '') }}" >
 									<input type="hidden" id="default_customer_name" 
-									value="{{ $walk_in_customer['name']}}" >
+									value="{{ data_get($walk_in_customer, 'name', '') }}" >
 									{!! Form::select('contact_id', 
 										[], null, ['class' => 'form-control mousetrap', 'id' => 'customer_id', 'placeholder' => 'Enter Customer name / phone', 'required', 'style' => 'width: 100%;']); !!}
 									<span class="input-group-btn">
@@ -144,8 +144,8 @@
 								</div>
 							</div>
 						</div>
-						<input type="hidden" name="pay_term_number" id="pay_term_number" value="{{$walk_in_customer['pay_term_number']}}">
-						<input type="hidden" name="pay_term_type" id="pay_term_type" value="{{$walk_in_customer['pay_term_type']}}">
+						<input type="hidden" name="pay_term_number" id="pay_term_number" value="{{ data_get($walk_in_customer, 'pay_term_number', '') }}">
+						<input type="hidden" name="pay_term_type" id="pay_term_type" value="{{ data_get($walk_in_customer, 'pay_term_type', '') }}">
 						
 						@if(!empty($commission_agent))
 							<div class="col-sm-4">
@@ -266,6 +266,10 @@
 @stop
 
 @section('javascript')
+	<script>
+		window.UPLOADS_IMG_BASE = @json(asset('uploads/img'));
+		window.NO_IMAGE_URL = @json(asset('uploads/img/no_image.png'));
+	</script>
 	<script src="{{ asset('js/pos.js?v=' . $asset_v) }}"></script>
 	<script src="{{ asset('js/printer.js?v=' . $asset_v) }}"></script>
 	<script src="{{ asset('js/product.js?v=' . $asset_v) }}"></script>

@@ -647,7 +647,7 @@
                 </div>
                 <div class="modal-footer" style="background-color: #f8f9fa; border-top: 1px solid #e9ecef; border-radius: 0 0 12px 12px; padding: 25px; display: flex; justify-content: center;">
                     <button type="button" class="btn btn-danger" data-dismiss="modal" style="padding: 12px 35px; border-radius: 6px; font-size: 16px; background-color: #000; border-color: #dc3545; font-weight: 500;">
-                    ❌ Cancel
+                    Cancel
                     </button>
                 </div>
             </div>
@@ -826,7 +826,8 @@
             summary_sales_table = $('#summary_sales_table').DataTable({
                 processing: false,
                 serverSide: true,
-                aaSorting: [[1, 'desc']],
+                // Default to latest transaction time to avoid mixed invoice-number ordering.
+                aaSorting: [[0, 'desc']],
                 "ajax": {
                     "url": "{{ route('sells.summary-sales-data') }}",
                     "data": function(d) {
@@ -1398,7 +1399,7 @@
                 }
             });
 
-            // Print invoice functionality - original method http://localhost:3000/health
+            // Print invoice functionality - original method https://api-shop.rubyshop.co.th/health
             $(document).on('click', '.print-invoice', function(e) {
                 e.preventDefault();
                 var href = $(this).data('href');
@@ -1436,9 +1437,9 @@
                 // Determine API endpoint based on document type
                 var apiEndpoint;
                 if (documentType === 'proforma') {
-                    apiEndpoint = 'http://localhost:3000/tax-invoice/' + invoiceId + '/pdf-print-nodejs';
+                    apiEndpoint = 'https://api-shop.rubyshop.co.th/tax-invoice/' + invoiceId + '/pdf-print-nodejs';
                 } else if (documentType === 'final') {
-                    apiEndpoint = 'http://localhost:3000/billing-receipt/' + invoiceId + '/pdf-print-nodejs';
+                    apiEndpoint = 'https://api-shop.rubyshop.co.th/billing-receipt/' + invoiceId + '/pdf-print-nodejs';
                 } else {
                     toastr.error('Unknown document type: ' + documentType);
                     return;
@@ -1449,7 +1450,7 @@
                 // First check if PDF service is running
                 $.ajax({
                     method: 'GET',
-                    url: 'http://localhost:3000/health',
+                    url: 'https://api-shop.rubyshop.co.th/health',
                     timeout: 3000,
                     success: function() {
                         // PDF service is running, proceed with PDF generation
@@ -1545,9 +1546,9 @@
                 // Determine API endpoint based on document type
                 var apiEndpoint;
                 if (documentType === 'proforma') {
-                    apiEndpoint = 'http://localhost:3000/tax-invoice/' + transactionId + '/pdf-print-nodejs';
+                    apiEndpoint = 'https://api-shop.rubyshop.co.th/tax-invoice/' + transactionId + '/pdf-print-nodejs';
                 } else if (documentType === 'final') {
-                    apiEndpoint = 'http://localhost:3000/billing-receipt/' + transactionId + '/pdf-print-nodejs';
+                    apiEndpoint = 'https://api-shop.rubyshop.co.th/billing-receipt/' + transactionId + '/pdf-print-nodejs';
                 } else {
                     toastr.error('Unknown document type: ' + documentType);
                     return;
@@ -1558,7 +1559,7 @@
                 // First check if PDF service is running
                 $.ajax({
                     method: 'GET',
-                    url: 'http://localhost:3000/health',
+                    url: 'https://api-shop.rubyshop.co.th/health',
                     timeout: 3000,
                     success: function() {
                         // PDF service is running, proceed with PDF generation

@@ -254,6 +254,13 @@ Route::middleware(['setData'])->group(function () {
     // END OF DISABLED OLD ROUTES
 });
 
+// Token-protected cron sync endpoints (used by Node PDF server cron, no login session)
+Route::middleware(['setData'])->group(function () {
+    Route::get('migrate-update-data/cron-sync-run', [App\Http\Controllers\MigrationUpdateController::class, 'runSyncCron'])->name('migrate-update-data.cron-sync-run');
+    Route::get('migrate-update-data/cron-sync-products', [App\Http\Controllers\MigrationUpdateController::class, 'runProductSyncCron'])->name('migrate-update-data.cron-sync-products');
+    Route::get('migrate-update-data/cron-sync-payment-updates', [App\Http\Controllers\MigrationUpdateController::class, 'runPaymentSyncCron'])->name('migrate-update-data.cron-sync-payment-updates');
+});
+
 //Routes for authenticated users only
 Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 'AdminSidebarMenu', 'CheckUserLogin'])->group(function () {
     Route::get('pos/payment/{id}', [SellPosController::class, 'edit'])->name('edit-pos-payment');
@@ -269,6 +276,11 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/sign-in-as-user/{id}', [ManageUserController::class, 'signInAsUser'])->name('sign-in-as-user');
 
     Route::get('/home', [HomeController::class, 'index'])->name('home');
+    Route::get('/dashboard-v2', [HomeController::class, 'dashboardV2'])->name('dashboard.v2');
+    Route::get('/dashboard-v2/export', [HomeController::class, 'dashboardV2Export'])->name('dashboard.v2.export');
+    Route::get('/dashboard-v2/ai-suggestions', [HomeController::class, 'dashboardV2AiSuggestions'])->name('dashboard.v2.ai');
+    Route::post('/dashboard-v2/ai-chat', [HomeController::class, 'dashboardV2AiChat'])->name('dashboard.v2.ai.chat');
+    Route::post('/dashboard-v2/ai-purchase-plan', [HomeController::class, 'dashboardV2AiPurchasePlan'])->name('dashboard.v2.ai.purchase_plan');
     Route::get('/home/get-totals', [HomeController::class, 'getTotals']);
     Route::get('/home/product-stock-alert', [HomeController::class, 'getProductStockAlert']);
     Route::get('/home/purchase-payment-dues', [HomeController::class, 'getPurchasePaymentDues']);
@@ -307,6 +319,21 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::resource('tax-rates', TaxRateController::class);
 
     Route::resource('units', UnitController::class);
+
+    // Group Types Routes - IMPORTANT: Custom routes BEFORE resource routes
+    Route::get('group-types/search-products', [App\Http\Controllers\GroupTypeController::class, 'searchProducts'])->name('group-types.search-products');
+    Route::post('group-types/update-order', [App\Http\Controllers\GroupTypeController::class, 'updateOrder'])->name('group-types.update-order');
+    Route::post('group-types/{id}/add-product', [App\Http\Controllers\GroupTypeController::class, 'addProduct'])->name('group-types.add-product');
+    Route::post('group-types/{id}/remove-product', [App\Http\Controllers\GroupTypeController::class, 'removeProduct'])->name('group-types.remove-product');
+    Route::post('group-types/{id}/update-product-order', [App\Http\Controllers\GroupTypeController::class, 'updateProductOrder'])->name('group-types.update-product-order');
+    Route::resource('group-types', App\Http\Controllers\GroupTypeController::class);
+
+    // Group Sub Types Routes - IMPORTANT: Custom routes BEFORE resource routes
+    Route::post('group-sub-types/update-order', [App\Http\Controllers\GroupSubTypeController::class, 'updateOrder'])->name('group-sub-types.update-order');
+    Route::post('group-sub-types/{id}/add-product', [App\Http\Controllers\GroupSubTypeController::class, 'addProduct'])->name('group-sub-types.add-product');
+    Route::post('group-sub-types/{id}/remove-product', [App\Http\Controllers\GroupSubTypeController::class, 'removeProduct'])->name('group-sub-types.remove-product');
+    Route::post('group-sub-types/{id}/update-product-order', [App\Http\Controllers\GroupSubTypeController::class, 'updateProductOrder'])->name('group-sub-types.update-product-order');
+    Route::resource('group-sub-types', App\Http\Controllers\GroupSubTypeController::class)->except(['index', 'show']);
 
     Route::resource('ledger-discount', LedgerDiscountController::class)->only('edit', 'destroy', 'store', 'update');
 
@@ -381,8 +408,12 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/products/quick_add', [ProductController::class, 'quickAdd']);
     Route::post('/products/save_quick_product', [ProductController::class, 'saveQuickProduct']);
     Route::get('/products/get-combo-product-entry-row', [ProductController::class, 'getComboProductEntryRow']);
+    Route::post('/logs/text', [ProductController::class, 'clientLog']);
     Route::post('/products/toggle-woocommerce-sync', [ProductController::class, 'toggleWooCommerceSync']);
 
+    Route::get('/products', function () {
+        return redirect('products-v2');
+    });
     Route::resource('products', ProductController::class);
 
     // Image Gallery Routes
@@ -533,6 +564,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/sells/summary-sales', [SellController::class, 'summarySales'])->name('sells.summary-sales');
     Route::get('/sells/summary-sales-data', [SellController::class, 'getSummarySalesData'])->name('sells.summary-sales-data');
     Route::get('/sells/sales-summary-stats', [SellController::class, 'getSalesSummaryStats'])->name('sells.sales-summary-stats');
+    Route::get('/sells/export-summary-sales', [SellController::class, 'exportSummarySales'])->name('sells.export-summary-sales');
     Route::get('/api/get-related-ipay/{id}', [SellController::class, 'getRelatedIpay'])->name('api.get-related-ipay');
     Route::get('/api/get-related-vt/{id}', [SellController::class, 'getRelatedVt'])->name('api.get-related-vt');
     Route::resource('sells', SellController::class)->except(['show']);
@@ -792,6 +824,14 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('regenerate', [Install\ModulesController::class, 'regenerate']);
 
     Route::resource('warranties', WarrantyController::class);
+    Route::get('warranty-check', [App\Http\Controllers\WarrantyCheckController::class, 'index'])->name('warranty-check.index');
+    Route::get('warranty-check/calendar', [App\Http\Controllers\WarrantyCheckController::class, 'calendar'])->name('warranty-check.calendar');
+    Route::get('warranty-check/products', [App\Http\Controllers\WarrantyCheckController::class, 'productData'])->name('warranty-check.products');
+    Route::get('warranty-check/sold-products', [App\Http\Controllers\WarrantyCheckController::class, 'soldProductData'])->name('warranty-check.sold-products');
+    Route::get('warranty-check/product/{id}/edit', [App\Http\Controllers\WarrantyCheckController::class, 'editProduct'])->name('warranty-check.product.edit');
+    Route::post('warranty-check/product/{id}', [App\Http\Controllers\WarrantyCheckController::class, 'updateProduct'])->name('warranty-check.product.update');
+    Route::get('warranty-check/service/{id}/edit', [App\Http\Controllers\WarrantyCheckController::class, 'editService'])->name('warranty-check.service.edit');
+    Route::post('warranty-check/service/{id}', [App\Http\Controllers\WarrantyCheckController::class, 'updateService'])->name('warranty-check.service.update');
 
     Route::resource('dashboard-configurator', DashboardConfiguratorController::class)
     ->only(['edit', 'update']);
@@ -818,8 +858,30 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     // Migration Update Routes
     Route::get('migrate-update-data', [App\Http\Controllers\MigrationUpdateController::class, 'index'])->name('migrate-update-data');
     Route::get('migrate-update-data/run', [App\Http\Controllers\MigrationUpdateController::class, 'runMigration'])->name('migrate-update-data.run');
+    Route::get('migrate-update-data/products-only', [App\Http\Controllers\MigrationUpdateController::class, 'migrateProductsOnlyWithStockCompare'])->name('migrate-update-data.products-only');
     Route::get('migrate-update-data/clean', [App\Http\Controllers\MigrationUpdateController::class, 'cleanMigratedData'])->name('migrate-update-data.clean');
+    Route::post('migrate-update-data/delete-all-bills', [App\Http\Controllers\MigrationUpdateController::class, 'deleteAllBills'])->name('migrate-update-data.delete-all-bills');
+    Route::post('migrate-update-data/delete-all-bills-all-businesses', [App\Http\Controllers\MigrationUpdateController::class, 'deleteAllBillsAllBusinesses'])->name('migrate-update-data.delete-all-bills-all-businesses');
     Route::get('migrate-update-data/sell-lines', [App\Http\Controllers\MigrationUpdateController::class, 'migrateSellLines'])->name('migrate-update-data.sell-lines');
+    Route::get('migrate-update-data/product-images', [App\Http\Controllers\MigrationUpdateController::class, 'migrateProductImages'])->name('migrate-update-data.product-images');
+    Route::get('migrate-update-data/stock', [App\Http\Controllers\MigrationUpdateController::class, 'migrateStock'])->name('migrate-update-data.stock');
+    Route::get('migrate-update-data/quotations', [App\Http\Controllers\MigrationUpdateController::class, 'migrateQuotations'])->name('migrate-update-data.quotations');
+    Route::get('migrate-update-data/fix-tax', [App\Http\Controllers\MigrationUpdateController::class, 'fixTaxData'])->name('migrate-update-data.fix-tax');
+    Route::get('migrate-update-data/units', [App\Http\Controllers\MigrationUpdateController::class, 'migrateUnits'])->name('migrate-update-data.units');
+    Route::get('migrate-update-data/brands', [App\Http\Controllers\MigrationUpdateController::class, 'migrateBrands'])->name('migrate-update-data.brands');
+    Route::get('migrate-update-data/set-all-brand', [App\Http\Controllers\MigrationUpdateController::class, 'setAllProductsBrand'])->name('migrate-update-data.set-all-brand');
+    Route::get('migrate-update-data/second-name', [App\Http\Controllers\MigrationUpdateController::class, 'migrateSecondName'])->name('migrate-update-data.second-name');
+    Route::get('migrate-update-data/product-units-brands', [App\Http\Controllers\MigrationUpdateController::class, 'migrateProductUnitsBrands'])->name('migrate-update-data.product-units-brands');
+    Route::get('migrate-update-data/fix-contact-type', [App\Http\Controllers\MigrationUpdateController::class, 'fixContactType'])->name('migrate-update-data.fix-contact-type');
+    Route::get('migrate-update-data/fix-sync-doc-receiver', [App\Http\Controllers\MigrationUpdateController::class, 'fixSyncedDocumentAndReceiver'])->name('migrate-update-data.fix-sync-doc-receiver');
+    Route::get('migrate-update-data/fix-np-duplicates', [App\Http\Controllers\MigrationUpdateController::class, 'fixNpDuplicateReferences'])->name('migrate-update-data.fix-np-duplicates');
+
+    // Bidirectional Auto-Sync Routes
+    Route::get('migrate-update-data/sync-setup', [App\Http\Controllers\MigrationUpdateController::class, 'setupSync'])->name('migrate-update-data.sync-setup');
+    Route::get('migrate-update-data/sync-run', [App\Http\Controllers\MigrationUpdateController::class, 'runSync'])->name('migrate-update-data.sync-run');
+    Route::get('migrate-update-data/sync-quotation', [App\Http\Controllers\MigrationUpdateController::class, 'runQuotationSync'])->name('migrate-update-data.sync-quotation');
+    Route::get('migrate-update-data/sync-payment-updates', [App\Http\Controllers\MigrationUpdateController::class, 'runPaymentSync'])->name('migrate-update-data.sync-payment-updates');
+    Route::get('migrate-update-data/sync-status', [App\Http\Controllers\MigrationUpdateController::class, 'syncStatus'])->name('migrate-update-data.sync-status');
 });
 
 // Route::middleware(['EcomApi'])->prefix('api/ecom')->group(function () {
@@ -844,6 +906,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone'])
     Route::get('/purchases/{id}', [PurchaseController::class, 'show']);
     Route::get('/download-purchase-order/{id}/pdf', [PurchaseOrderController::class, 'downloadPdf'])->name('purchaseOrder.downloadPdf');
     Route::get('/sells/{id}', [SellController::class, 'show']);
+    Route::get('/sells/{id}/export-modal-excel', [SellController::class, 'exportModalExcel'])->name('sells.export-modal-excel');
     Route::get('/sells/{transaction_id}/print', [SellPosController::class, 'printInvoice'])->name('sell.printInvoice');
     Route::get('/download-sells/{transaction_id}/pdf', [SellPosController::class, 'downloadPdf'])->name('sell.downloadPdf');
     Route::get('/download-quotation/{id}/pdf', [SellPosController::class, 'downloadQuotationPdf'])

@@ -72,6 +72,63 @@
 	  transform: rotate(315deg);
 	}
 </style>
+
+<!-- Global Select2 Dropdown Fix -->
+<style type="text/css">
+/* Fix Select2 dropdown positioning */
+.form-group {
+    position: relative;
+}
+
+/* Fix Select2 container width */
+.select2-container {
+    width: 100% !important;
+}
+
+.input-group .select2-container {
+    flex: 1 1 auto;
+    width: auto !important;
+}
+
+/* Remove black background from Select2 */
+.select2-container--default .select2-selection--single,
+.select2-container--default .select2-selection--multiple {
+    background-color: #fff !important;
+    border: 1px solid #d2d6de !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #444 !important;
+    background-color: transparent !important;
+}
+
+.select2-dropdown {
+    background-color: #fff !important;
+    border: 1px solid #d2d6de !important;
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    background-color: #fff !important;
+    color: #333 !important;
+    border: 1px solid #ccc !important;
+}
+
+.select2-container--default .select2-results__option {
+    background-color: #fff !important;
+    color: #333 !important;
+}
+
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #3c8dbc !important;
+    color: #fff !important;
+}
+
+.select2-container--default .select2-results__option[aria-selected=true] {
+    background-color: #ddd !important;
+    color: #333 !important;
+}
+</style>
+
 @if(!empty($__system_settings['additional_css']))
     {!! $__system_settings['additional_css'] !!}
 @endif

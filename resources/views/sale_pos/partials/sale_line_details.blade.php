@@ -24,17 +24,25 @@
         <tr>
             <td>{{ $loop->iteration }}</td>
             <td>
-                {{ $sell_line->product->name }}
-                @if( $sell_line->product->type == 'variable')
-                - {{ $sell_line->variations->product_variation->name ?? ''}}
-                - {{ $sell_line->variations->name ?? ''}},
-                @endif
-                {{ $sell_line->variations->sub_sku ?? ''}}
-                @php
-                $brand = $sell_line->product->brand;
-                @endphp
-                @if(!empty($brand->name))
-                , {{$brand->name}}
+                @if($sell_line->product)
+                    {{ $sell_line->product->name }}
+                    @if( $sell_line->product->type == 'variable')
+                    - {{ $sell_line->variations->product_variation->name ?? ''}}
+                    - {{ $sell_line->variations->name ?? ''}},
+                    @endif
+                    {{ $sell_line->variations->sub_sku ?? ''}}
+                    @php
+                    $brand = $sell_line->product->brand;
+                    @endphp
+                    @if(!empty($brand->name))
+                    , {{$brand->name}}
+                    @endif
+                @else
+                    <span class="text-red">Product Label (Missing)</span>
+                    @if(!empty($sell_line->variations->name))
+                        - {{ $sell_line->variations->name }}
+                    @endif
+                    <br><small class="text-muted">SKU: {{ $sell_line->variations->sub_sku ?? 'N/A' }}</small>
                 @endif
 
                 @if(!empty($sell_line->sell_line_note))
@@ -59,7 +67,7 @@
                 </td>
             @endif
             @if($sell->type == 'sales_order')
-                <td><span class="display_currency" data-currency_symbol="false" data-is_quantity="true">{{ $sell_line->quantity - $sell_line->so_quantity_invoiced }}</span> @if(!empty($sell_line->sub_unit)) {{$sell_line->sub_unit->short_name}} @else {{$sell_line->product->unit->short_name}} @endif</td>
+                <td><span class="display_currency" data-currency_symbol="false" data-is_quantity="true">{{ $sell_line->quantity - $sell_line->so_quantity_invoiced }}</span> @if(!empty($sell_line->sub_unit)) {{$sell_line->sub_unit->short_name}} @elseif(!empty($sell_line->product->unit)) {{$sell_line->product->unit->short_name}} @endif</td>
             @endif
             <td>
                 @if(!empty($for_ledger))
@@ -67,9 +75,9 @@
                 @else
                     <span class="display_currency" data-currency_symbol="false" data-is_quantity="true">{{ $sell_line->quantity }}</span> 
                 @endif
-                    @if(!empty($sell_line->sub_unit)) {{$sell_line->sub_unit->short_name}} @else {{$sell_line->product->unit->short_name}} @endif
+                @if(!empty($sell_line->sub_unit)) {{$sell_line->sub_unit->short_name}} @elseif(!empty($sell_line->product->unit)) {{$sell_line->product->unit->short_name}} @endif
 
-                @if(!empty($sell_line->product->second_unit) && $sell_line->secondary_unit_quantity != 0)
+                @if(!empty($sell_line->product) && !empty($sell_line->product->second_unit) && $sell_line->secondary_unit_quantity != 0)
                     <br>
                     @if(!empty($for_ledger))
                         {{@format_quantity($sell_line->secondary_unit_quantity)}}

@@ -907,7 +907,7 @@
             </div>
             
             <div class="categories-search">
-                <input type="text" id="category-search" placeholder="🔍 Search categories...">
+                <input type="text" id="category-search" placeholder=" Search categories...">
                 <div class="drag-instructions">
                     <i class="fa fa-info-circle"></i>
                     <strong>Hierarchical Drag & Drop:</strong> Use grip handles to reorder categories. 
@@ -927,7 +927,7 @@
                     @endforeach
                 @else
                     <div class="empty-state">
-                        <div class="empty-state-icon">📂</div>
+                        <div class="empty-state-icon"></div>
                         <h3>No Categories Found</h3>
                         <p>Create some product categories to get started.</p>
                     </div>

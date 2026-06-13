@@ -3,6 +3,13 @@
 
 @section('content')
 
+<style>
+.unit-brand-label {
+    display: block;
+    width: 100%;
+}
+</style>
+
 @php
   $is_image_required = !empty($common_settings['is_product_image_required']) && empty($product->image);
 @endphp
@@ -35,6 +42,14 @@
 
             <div class="col-sm-4">
               <div class="form-group">
+                {!! Form::label('second_name', 'Second Name' . ':') !!}
+                {!! Form::text('second_name', $product->second_name, ['class' => 'form-control',
+                'placeholder' => 'Second Name']); !!}
+              </div>
+            </div>
+
+            <div class="col-sm-4">
+              <div class="form-group">
                 {!! Form::label('sku', __('product.sku')  . ':*') !!} @show_tooltip(__('tooltip.sku'))
                 {!! Form::text('sku', $product->sku, ['class' => 'form-control',
                 'placeholder' => __('product.sku'), 'required']); !!}
@@ -52,7 +67,7 @@
             
             <div class="col-sm-4">
               <div class="form-group">
-                {!! Form::label('unit_id', __('product.unit') . ':*') !!}
+                {!! Form::label('unit_id', __('product.unit') . ':*', ['class' => 'unit-brand-label']) !!}
                 <div class="input-group">
                   {!! Form::select('unit_id', $units, $product->unit_id, ['placeholder' => __('messages.please_select'), 'class' => 'form-control select2', 'required']); !!}
                   <span class="input-group-btn">
@@ -87,7 +102,7 @@
 
             <div class="col-sm-4 @if(!session('business.enable_brand')) hide @endif">
               <div class="form-group">
-                {!! Form::label('brand_id', __('product.brand') . ':') !!}
+                {!! Form::label('brand_id', __('product.brand') . ':', ['class' => 'unit-brand-label']) !!}
                 <div class="input-group">
                   {!! Form::select('brand_id', $brands, $product->brand_id, ['placeholder' => __('messages.please_select'), 'class' => 'form-control select2']); !!}
                   <span class="input-group-btn">
@@ -429,13 +444,18 @@
               @endif
 
               @can('product.opening_stock')
-              <button type="submit" @if(empty($product->enable_stock)) disabled="true" @endif id="opening_stock_button"  value="update_n_edit_opening_stock" class="tw-dw-btn tw-text-white tw-dw-btn-lg bg-purple submit_product_form">@lang('lang_v1.update_n_edit_opening_stock')</button>
+              <button type="submit" @if(empty($product->enable_stock)) disabled="true" @endif id="opening_stock_button" value="update_n_edit_opening_stock" class="tw-dw-btn tw-text-white tw-dw-btn-lg bg-purple submit_product_form">@lang('lang_v1.update_n_edit_opening_stock')</button>
               @endif
 
               <button type="submit" value="save_n_add_another" class="tw-dw-btn tw-text-white tw-dw-btn-lg bg-maroon submit_product_form">@lang('lang_v1.update_n_add_another')</button>
 
               <button type="submit" value="submit" class="tw-dw-btn tw-dw-btn-primary tw-text-white tw-dw-btn-lg submit_product_form">@lang('messages.update')</button>
             </div>
+            @can('product.opening_stock')
+            <div id="opening_stock_warning" class="text-danger" style="margin-top: 8px; @if(!empty($product->enable_stock)) display: none; @endif">
+              กรุณาเลือก "Manage Stock?" ให้เป็น Yes ก่อน
+            </div>
+            @endcan
           </div>
         </div>
   </div>
@@ -460,6 +480,28 @@
 
           $typeSelect.select2();
       }
+
+      // Opening stock button + warning tied to Manage Stock?
+      function updateOpeningStockState() {
+          if ($('#enable_stock').is(':checked')) {
+              $('#opening_stock_button').prop('disabled', false).removeClass('disabled');
+              $('#opening_stock_warning').hide();
+          } else {
+              $('#opening_stock_button').prop('disabled', true).addClass('disabled');
+              $('#opening_stock_warning').show();
+          }
+      }
+
+      var $unitSelect = $('#unit_id');
+      if ($unitSelect.length) {
+          $unitSelect.find('option[value=""]').slice(1).remove();
+      }
+
+      $('#enable_stock').on('ifChanged', function() {
+          updateOpeningStockState();
+      });
+
+      updateOpeningStockState();
   });
   </script>
 

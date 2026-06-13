@@ -701,7 +701,7 @@
 <!-- Content Header -->
 <section class="content-header">
     <h1 class="tw-text-xl md:tw-text-3xl tw-font-bold tw-text-black">
-        📂 Category Tree
+         Category Tree
         <small class="tw-text-sm md:tw-text-base tw-text-gray-700 tw-font-semibold">Browse products by category</small>
     </h1>
 </section>
@@ -717,7 +717,7 @@
             </div>
             
             <div class="categories-search">
-                <input type="text" id="category-search" placeholder="🔍 Search categories...">
+                <input type="text" id="category-search" placeholder=" Search categories...">
                 <button type="button" id="test-connection" class="btn btn-sm btn-info" style="margin-top: 5px;">Test Connection</button>
                 <button type="button" id="debug-categories" class="btn btn-sm btn-warning" style="margin-top: 5px; margin-left: 5px;">Debug Categories</button>
                 <button type="button" id="test-products" class="btn btn-sm btn-success" style="margin-top: 5px; margin-left: 5px;">Test Products (Cat 2)</button>
@@ -730,7 +730,7 @@
                     @endforeach
                 @else
                     <div class="empty-state">
-                        <div class="empty-state-icon">📂</div>
+                        <div class="empty-state-icon"></div>
                         <h3>No Categories Found</h3>
                         <p>Create some product categories to get started.</p>
                     </div>
@@ -1177,8 +1177,8 @@ $(document).ready(function() {
             let currentStock = product.current_stock || product.stock || 0;
             const stockClass = currentStock > 0 ? 'in-stock' : 'out-of-stock';
             const stockText = currentStock > 0 ? 
-                `✅ In Stock (${currentStock})` : 
-                '❌ Out of Stock';
+                ` In Stock (${currentStock})` : 
+                'Out of Stock';
             
             // Handle image URL
             const imageHtml = product.image ? 

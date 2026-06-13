@@ -25,6 +25,10 @@ use App\Warranty;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Spatie\Activitylog\Models\Activity;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -78,6 +82,11 @@ class SellController extends Controller
 
         if (! $is_admin && ! auth()->user()->hasAnyPermission(['sell.view', 'sell.create', 'direct_sell.access', 'direct_sell.view', 'view_own_sell_only', 'view_commission_agent_sell', 'access_shipping', 'access_own_shipping', 'access_commission_agent_shipping', 'so.view_all', 'so.view_own'])) {
             abort(403, 'Unauthorized action.');
+        }
+
+        // Redirect non-AJAX requests to summary-sales page
+        if (!request()->ajax()) {
+            return redirect()->route('sells.summary-sales');
         }
 
         $business_id = request()->session()->get('user.business_id');
@@ -435,19 +444,17 @@ class SellController extends Controller
                             }
                         }
 
-                        // Add conditional PDF print buttons and action buttons based on document type
+                        // Single-document print actions for VT rows, with legacy IPAY support.
                         if (auth()->user()->can('print_invoice') && $sale_type != 'sales_order') {
-                            if ($row->status == 'final') {
-                                // Final bills can only print Billing Receipt
-                                $html .= '<li><a href="'.route('billing-receipt.pdfprint.nodejs', ['id' => $row->id]).'" class="pdf-print-btn"><i class="fas fa-receipt" aria-hidden="true"></i> Print Billing Receipt</a></li>';
-                            } elseif ($row->status == 'draft' && $row->sub_status == 'proforma') {
-                                // Proforma invoices (Tax Invoices) can print and create billing receive
+                            $invoice_no = (string) ($row->invoice_no ?? '');
+                            $is_vt_document = str_starts_with($invoice_no, 'VT') || $row->document_type == 'proforma' || $row->sub_status == 'proforma';
+                            $is_ipay_document = str_starts_with($invoice_no, 'IPAY');
+
+                            if ($is_vt_document) {
                                 $html .= '<li><a href="'.route('tax-invoice.pdfprint.nodejs', ['id' => $row->id]).'" class="pdf-print-btn"><i class="fas fa-file-invoice" aria-hidden="true"></i> Print Tax Invoice</a></li>';
-                                
-                                // Add Create Billing-receive button for tax-invoices (proforma)
-                                if (auth()->user()->can('sell.create') || auth()->user()->can('direct_sell.access')) {
-                                    $html .= '<li><a href="#" onclick="createBillingReceive('.$row->id.')" class="create-billing-receive-btn"><i class="fas fa-receipt" aria-hidden="true"></i> Create Billing-receive</a></li>';
-                                }
+                                $html .= '<li><a href="'.route('billing-receipt.pdfprint.nodejs', ['id' => $row->id]).'" class="pdf-print-btn"><i class="fas fa-receipt" aria-hidden="true"></i> Print Billing Receipt</a></li>';
+                            } elseif ($row->status == 'final' || $is_ipay_document) {
+                                $html .= '<li><a href="'.route('billing-receipt.pdfprint.nodejs', ['id' => $row->id]).'" class="pdf-print-btn"><i class="fas fa-receipt" aria-hidden="true"></i> Print Billing Receipt</a></li>';
                             }
                         }
 
@@ -516,22 +523,21 @@ class SellController extends Controller
                         $html = '';
                         
                         if (auth()->user()->can('print_invoice') && $sale_type != 'sales_order') {
-                            if ($row->status == 'final') {
-                                // Final bills - show Billing Receipt button
-                                $html = '<a href="'.route('billing-receipt.pdfprint.nodejs', ['id' => $row->id]).'" class="btn btn-xs btn-info pdf-print-btn quick-action-btn" title="Print Billing Receipt">
-                                    <i class="fas fa-receipt"></i>
-                                </a>';
-                            } elseif ($row->status == 'draft' && $row->sub_status == 'proforma') {
-                                // Proforma invoices (Tax Invoices) - show Tax Invoice button and Create Billing-receive button
+                            $invoice_no = (string) ($row->invoice_no ?? '');
+                            $is_vt_document = str_starts_with($invoice_no, 'VT') || $row->document_type == 'proforma' || $row->sub_status == 'proforma';
+                            $is_ipay_document = str_starts_with($invoice_no, 'IPAY');
+
+                            if ($is_vt_document) {
                                 $html = '<a href="'.route('tax-invoice.pdfprint.nodejs', ['id' => $row->id]).'" class="btn btn-xs btn-success pdf-print-btn quick-action-btn" title="Print Tax Invoice">
                                     <i class="fas fa-file-invoice"></i>
                                 </a>';
-                                
-                                if (auth()->user()->can('sell.create') || auth()->user()->can('direct_sell.access')) {
-                                    $html .= ' <a href="#" onclick="createBillingReceive('.$row->id.')" class="btn btn-xs btn-warning create-billing-receive-btn quick-action-btn" title="Create Billing-receive">
-                                        <i class="fas fa-plus"></i>
-                                    </a>';
-                                }
+                                $html .= ' <a href="'.route('billing-receipt.pdfprint.nodejs', ['id' => $row->id]).'" class="btn btn-xs btn-info pdf-print-btn quick-action-btn" title="Print Billing Receipt">
+                                    <i class="fas fa-receipt"></i>
+                                </a>';
+                            } elseif ($row->status == 'final' || $is_ipay_document) {
+                                $html = '<a href="'.route('billing-receipt.pdfprint.nodejs', ['id' => $row->id]).'" class="btn btn-xs btn-info pdf-print-btn quick-action-btn" title="Print Billing Receipt">
+                                    <i class="fas fa-receipt"></i>
+                                </a>';
                             }
                         }
                         
@@ -841,7 +847,7 @@ class SellController extends Controller
 
         $change_return = $this->dummyPaymentLine;
 
-        // Get customer sources for dropdown
+        // Get customer sources for radio buttons (full objects with logo)
         $customer_sources = \App\CustomerSource::getActiveForBusiness($business_id);
 
         // Get all users for responsible salesperson dropdown
@@ -981,6 +987,650 @@ class SellController extends Controller
                 'sales_orders',
                 'line_taxes'
             ));
+    }
+
+    /**
+     * Export current modal transaction data to Excel (with embedded images).
+     *
+     * @param  int  $id
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse
+     */
+    public function exportModalExcel($id)
+    {
+        $user = auth()->user();
+        $can_sell_all = $user->can('sell.view') || $user->can('direct_sell.access');
+        $can_sell_own = $user->can('view_own_sell_only');
+        $can_quotation_all = $user->can('quotation.view_all');
+        $can_quotation_own = $user->can('quotation.view_own');
+
+        if (! $can_sell_all && ! $can_sell_own && ! $can_quotation_all && ! $can_quotation_own) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+        $user_id = (int) request()->session()->get('user.id');
+
+        $query = Transaction::where('business_id', $business_id)
+            ->where('id', $id)
+            ->with([
+                'contact',
+                'delivery_person_user',
+                'sell_lines' => function ($q) {
+                    $q->whereNull('parent_sell_line_id');
+                },
+                'sell_lines.product',
+                'sell_lines.product.unit',
+                'sell_lines.product.second_unit',
+                'sell_lines.variations',
+                'sell_lines.variations.product_variation',
+                'payment_lines',
+                'sell_lines.modifiers',
+                'sell_lines.lot_details',
+                'tax',
+                'sell_lines.sub_unit',
+                'table',
+                'service_staff',
+                'sell_lines.service_staff',
+                'types_of_service',
+                'sell_lines.warranties',
+                'media',
+            ]);
+
+        $sell = $query->firstOrFail();
+        $invoice_no = (string) ($sell->invoice_no ?? '');
+        $is_vt_document = str_starts_with($invoice_no, 'VT')
+            || $sell->document_type === 'proforma'
+            || $sell->sub_status === 'proforma';
+        $is_quotation_document = ((int) ($sell->is_quotation ?? 0) === 1)
+            || $sell->document_type === 'quotation'
+            || $sell->sub_status === 'quotation';
+
+        if (! $is_vt_document && ! $is_quotation_document) {
+            abort(422, 'Only VT or quotation documents can be exported from this button.');
+        }
+
+        $is_owner = ((int) ($sell->created_by ?? 0) === $user_id);
+        if ($is_vt_document) {
+            $can_view_this = $can_sell_all || ($can_sell_own && $is_owner);
+        } else {
+            $can_view_this = $can_quotation_all
+                || ($can_quotation_own && $is_owner)
+                || $can_sell_all
+                || ($can_sell_own && $is_owner);
+        }
+
+        if (! $can_view_this) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $document_type = $is_quotation_document ? 'quotation' : 'proforma';
+
+        $payment_types = $this->transactionUtil->payment_types($sell->location_id, true);
+        $order_taxes = [];
+        if (! empty($sell->tax)) {
+            if ($sell->tax->is_tax_group) {
+                $order_taxes = $this->transactionUtil->sumGroupTaxDetails(
+                    $this->transactionUtil->groupTaxDetails($sell->tax, $sell->tax_amount)
+                );
+            } else {
+                $order_taxes[$sell->tax->name] = $sell->tax_amount;
+            }
+        }
+
+        $business_details = $this->businessUtil->getDetails($business_id);
+        $context = $this->resolveModalDocumentContext($sell);
+
+        $spreadsheet = new Spreadsheet();
+
+        $summary_sheet = $spreadsheet->getActiveSheet();
+        $summary_sheet->setTitle('Summary_Items');
+        $this->buildModalSummarySheet($summary_sheet, $sell, $order_taxes, $payment_types, $business_details, $context, $document_type);
+        $items_start_row = $summary_sheet->getHighestRow() + 3;
+        $summary_sheet->setCellValue('B' . ($items_start_row - 1), 'Items');
+        $summary_sheet->getStyle('B' . ($items_start_row - 1))->getFont()->setBold(true)->setSize(12);
+        $this->appendModalItemsTable($summary_sheet, $sell, $items_start_row);
+        $payments_start_row = $summary_sheet->getHighestRow() + 3;
+        $summary_sheet->setCellValue('B' . ($payments_start_row - 1), 'Payments');
+        $summary_sheet->getStyle('B' . ($payments_start_row - 1))->getFont()->setBold(true)->setSize(12);
+        $this->appendModalPaymentsTable($summary_sheet, $sell, $payment_types, $payments_start_row);
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        $filename = 'invoice_' . $this->sanitizeFilenamePart($invoice_no) . '_' . $document_type . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            while (ob_get_level() > 0) {
+                @ob_end_clean();
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+            'Pragma' => 'public',
+        ]);
+    }
+
+    private function buildModalSummarySheet(
+        Worksheet $sheet,
+        Transaction $sell,
+        array $order_taxes,
+        array $payment_types,
+        $business_details,
+        array $context,
+        string $document_type
+    ): void {
+        // Keep column A narrow for item numbering section below; summary uses B-I.
+        $sheet->getColumnDimension('A')->setWidth(6);
+        $sheet->getColumnDimension('B')->setWidth(22);
+        $sheet->getColumnDimension('C')->setWidth(26);
+        $sheet->getColumnDimension('D')->setWidth(22);
+        $sheet->getColumnDimension('E')->setWidth(26);
+        $sheet->getColumnDimension('F')->setWidth(22);
+        $sheet->getColumnDimension('G')->setWidth(26);
+        $sheet->getColumnDimension('H')->setWidth(22);
+        $sheet->getColumnDimension('I')->setWidth(26);
+
+        $sheet->mergeCells('B1:I1');
+        $sheet->setCellValue('B1', 'Summary Sales Modal Export');
+        $sheet->getStyle('B1')->getFont()->setBold(true)->setSize(14);
+
+        $total_paid = 0.0;
+        foreach ($sell->payment_lines as $payment_line) {
+            $total_paid += ((int) $payment_line->is_return === 1 ? -1 : 1) * (float) $payment_line->amount;
+        }
+        $total_remaining = (float) $sell->final_total - $total_paid;
+
+        $billing_address_text = '';
+        $billing_address = $sell->billing_address(true);
+        if (is_array($billing_address)) {
+            unset($billing_address['name'], $billing_address['company']);
+            $billing_address_text = implode(', ', array_filter($billing_address));
+        }
+
+        $customer_name = '';
+        if (! empty($sell->contact)) {
+            $supplier_name = $sell->contact->supplier_business_name ?? '';
+            $contact_name = $sell->contact->name ?? '';
+            if (! empty($supplier_name) && $supplier_name !== $contact_name) {
+                $customer_name = $supplier_name . ' / ' . $contact_name;
+            } else {
+                $customer_name = $contact_name;
+            }
+        }
+
+        $payment_method_list = [];
+        foreach ($sell->payment_lines as $payment_line) {
+            $method_key = (string) ($payment_line->method ?? '');
+            if ($method_key !== '') {
+                $payment_method_list[] = $payment_types[$method_key] ?? $method_key;
+            }
+        }
+        $payment_method_list = array_values(array_unique($payment_method_list));
+
+        $company_lines = array_filter([
+            $business_details->name ?? '',
+            ! empty($business_details->tax_number) ? 'Tax ID: ' . $business_details->tax_number : '',
+            implode(', ', array_filter([
+                $business_details->landmark ?? '',
+                $business_details->city ?? '',
+                $business_details->state ?? '',
+                $business_details->country ?? '',
+                $business_details->zip_code ?? '',
+            ])),
+            ! empty($business_details->mobile) ? 'Phone: ' . $business_details->mobile : '',
+            ! empty($business_details->alternate_number) ? 'Alt Phone: ' . $business_details->alternate_number : '',
+            ! empty($business_details->email) ? 'Email: ' . $business_details->email : '',
+        ]);
+
+        $rows = [
+            ['Invoice No', (string) ($sell->invoice_no ?? '')],
+            ['Transaction Date', $this->transactionUtil->format_date($sell->transaction_date, true)],
+            ['Document Label', (string) ($context['doc_type_label'] ?? '')],
+            ['Document Label (EN)', (string) ($context['doc_type_en'] ?? '')],
+            ['Sell Status', (string) ($context['status_label'] ?? '')],
+            ['Payment Status', (string) ($context['payment_status_label'] ?? '')],
+            ['Payment Methods', implode(', ', $payment_method_list)],
+            ['Related Tax-Invoice No', (string) ($context['related_vt_invoice_no'] ?? '')],
+            ['Related Billing-Receive No', (string) ($context['related_ipay_invoice_no'] ?? '')],
+            ['Customer', $customer_name],
+            ['Customer Tax ID', (string) ($sell->contact->tax_number ?? '')],
+            ['Customer Phone', (string) ($sell->contact->mobile ?? '')],
+            ['Customer Email', (string) ($sell->contact->email ?? '')],
+            ['Customer Address', $billing_address_text],
+            ['Company Details', implode("\n", $company_lines)],
+            ['Total Before Tax', (float) ($sell->total_before_tax ?? 0)],
+        ];
+
+        foreach ($order_taxes as $tax_name => $tax_value) {
+            $rows[] = ['Tax - ' . $tax_name, (float) $tax_value];
+        }
+
+        $rows[] = ['Shipping Charges', (float) ($sell->shipping_charges ?? 0)];
+        $rows[] = ['Final Total', (float) ($sell->final_total ?? 0)];
+        $rows[] = ['Total Paid', $total_paid];
+        $rows[] = ['Total Remaining', $total_remaining];
+        $rows[] = ['Additional Notes', (string) ($sell->additional_notes ?? '')];
+        $rows[] = ['Staff Note', (string) ($sell->staff_note ?? '')];
+
+        array_unshift(
+            $rows,
+            ['Generated At', date('Y-m-d H:i:s')],
+            ['Document Type Request', $document_type]
+        );
+
+        $pair_slots = [
+            ['B', 'C'],
+            ['D', 'E'],
+            ['F', 'G'],
+            ['H', 'I'],
+        ];
+
+        $row_no = 2;
+        $slot_index = 0;
+        foreach ($rows as $entry) {
+            $label_col = $pair_slots[$slot_index][0];
+            $value_col = $pair_slots[$slot_index][1];
+            $sheet->setCellValue($label_col . $row_no, $entry[0]);
+            $sheet->setCellValue($value_col . $row_no, $entry[1]);
+
+            $slot_index++;
+            if ($slot_index >= count($pair_slots)) {
+                $slot_index = 0;
+                $row_no++;
+            }
+        }
+
+        if ($slot_index !== 0) {
+            $row_no++;
+        }
+
+        $last_data_row = $row_no - 1;
+        $sheet->getStyle('B2:B' . $last_data_row)->getFont()->setBold(true);
+        $sheet->getStyle('D2:D' . $last_data_row)->getFont()->setBold(true);
+        $sheet->getStyle('F2:F' . $last_data_row)->getFont()->setBold(true);
+        $sheet->getStyle('H2:H' . $last_data_row)->getFont()->setBold(true);
+        $sheet->getStyle('C2:I' . $last_data_row)->getAlignment()->setWrapText(true);
+    }
+
+    private function appendModalItemsTable(Worksheet $sheet, Transaction $sell, int $start_row): void
+    {
+        $headers = ['#', 'Description', 'SKU', 'Qty', 'Unit', 'Unit Price', 'Amount', 'Product Image', 'Image URL'];
+        $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue($columns[$index] . $start_row, $header);
+        }
+
+        $sheet->getStyle('A' . $start_row . ':I' . $start_row)->getFont()->setBold(true);
+        $sheet->getStyle('B:I')->getAlignment()->setWrapText(true);
+
+        $item_column_widths = [
+            'A' => 6,
+            'B' => 42,
+            'C' => 18,
+            'D' => 10,
+            'E' => 10,
+            'F' => 14,
+            'G' => 14,
+            'H' => 18,
+            'I' => 45,
+        ];
+        foreach ($item_column_widths as $column => $width) {
+            $current_width = (float) $sheet->getColumnDimension($column)->getWidth();
+            if ($current_width < $width) {
+                $sheet->getColumnDimension($column)->setWidth($width);
+            }
+        }
+
+        $row_no = $start_row + 1;
+        foreach ($sell->sell_lines as $index => $sell_line) {
+            $description = '';
+            if (! empty($sell_line->product)) {
+                $description = (string) $sell_line->product->name;
+                $variation_parts = [];
+                $product_variation_name = (string) ($sell_line->variations->product_variation->name ?? '');
+                $variation_name = (string) ($sell_line->variations->name ?? '');
+
+                if (! $this->isDummyLabel($product_variation_name)) {
+                    $variation_parts[] = trim($product_variation_name);
+                }
+                if (! $this->isDummyLabel($variation_name)) {
+                    $variation_parts[] = trim($variation_name);
+                }
+
+                $variation_parts = array_values(array_unique(array_filter($variation_parts)));
+                if (! empty($variation_parts)) {
+                    $description .= ' - ' . implode(' - ', $variation_parts);
+                }
+            } else {
+                $description = 'Product Label (Missing)';
+            }
+
+            $sku = (string) ($sell_line->variations->sub_sku ?? '');
+            $quantity = (float) ($sell_line->quantity ?? 0);
+            $unit_name = (string) ($sell_line->sub_unit->short_name ?? ($sell_line->product->unit->short_name ?? ''));
+            $unit_price = (float) ($sell_line->unit_price_before_discount ?? 0);
+            $amount = $quantity * (float) ($sell_line->unit_price_inc_tax ?? 0);
+            $image_url = (string) ($sell_line->product->image_url ?? '');
+
+            $sheet->setCellValue('A' . $row_no, $index + 1);
+            $sheet->setCellValue('B' . $row_no, $description);
+            $sheet->setCellValue('C' . $row_no, $sku);
+            $sheet->setCellValue('D' . $row_no, $quantity);
+            $sheet->setCellValue('E' . $row_no, $unit_name);
+            $sheet->setCellValue('F' . $row_no, $unit_price);
+            $sheet->setCellValue('G' . $row_no, $amount);
+            $sheet->setCellValue('I' . $row_no, $image_url);
+            $this->applyClickableHyperlink($sheet, 'I' . $row_no, $image_url);
+
+            $image_embedded = $this->tryEmbedImage($sheet, $image_url, 'H' . $row_no);
+            if (! $image_embedded) {
+                $sheet->setCellValue('H' . $row_no, 'Image unavailable');
+            } else {
+                $sheet->getRowDimension($row_no)->setRowHeight(80);
+            }
+
+            $row_no++;
+        }
+
+        if ($row_no === $start_row + 1) {
+            $sheet->setCellValue('A' . ($start_row + 1), 'No item rows found');
+        }
+    }
+
+    private function appendModalPaymentsTable(Worksheet $sheet, Transaction $sell, array $payment_types, int $start_row): void
+    {
+        $headers = ['#', 'Paid On', 'Reference No', 'Amount', 'Method', 'Note', 'Slip Image', 'Slip URL'];
+        $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue($columns[$index] . $start_row, $header);
+        }
+
+        $sheet->getStyle('A' . $start_row . ':H' . $start_row)->getFont()->setBold(true);
+        $sheet->getStyle('B:H')->getAlignment()->setWrapText(true);
+
+        $payment_column_widths = [
+            'A' => 6,
+            'B' => 22,
+            'C' => 22,
+            'D' => 14,
+            'E' => 18,
+            'F' => 30,
+            'G' => 18,
+            'H' => 50,
+        ];
+        foreach ($payment_column_widths as $column => $width) {
+            $current_width = (float) $sheet->getColumnDimension($column)->getWidth();
+            if ($current_width < $width) {
+                $sheet->getColumnDimension($column)->setWidth($width);
+            }
+        }
+
+        $row_no = $start_row + 1;
+        foreach ($sell->payment_lines as $index => $payment_line) {
+            $method_key = (string) ($payment_line->method ?? '');
+            $method_label = $payment_types[$method_key] ?? $method_key;
+            $document_path = (string) ($payment_line->document_path ?? '');
+
+            $sheet->setCellValue('A' . $row_no, $index + 1);
+            $sheet->setCellValue('B' . $row_no, ! empty($payment_line->paid_on) ? $this->transactionUtil->format_date($payment_line->paid_on, true) : '');
+            $sheet->setCellValue('C' . $row_no, (string) ($payment_line->payment_ref_no ?? ''));
+            $sheet->setCellValue('D' . $row_no, ((int) $payment_line->is_return === 1 ? -1 : 1) * (float) ($payment_line->amount ?? 0));
+            $sheet->setCellValue('E' . $row_no, $method_label);
+            $sheet->setCellValue('F' . $row_no, strip_tags((string) ($payment_line->note ?? '')));
+            $sheet->setCellValue('H' . $row_no, $document_path);
+
+            $is_image = $this->isImageSource($document_path);
+            if ($is_image && $this->tryEmbedImage($sheet, $document_path, 'G' . $row_no)) {
+                $sheet->getRowDimension($row_no)->setRowHeight(80);
+            } elseif (! empty($document_path)) {
+                $sheet->setCellValue('G' . $row_no, $is_image ? 'Image unavailable' : 'Not an image document');
+            } else {
+                $sheet->setCellValue('G' . $row_no, '');
+            }
+
+            $row_no++;
+        }
+
+        if ($row_no === $start_row + 1) {
+            $sheet->setCellValue('A' . ($start_row + 1), 'No payment rows found');
+        }
+    }
+
+    private function resolveModalDocumentContext(Transaction $sell): array
+    {
+        $invoice_no = (string) ($sell->invoice_no ?? '');
+        $is_vt = substr($invoice_no, 0, 2) === 'VT';
+        $is_ipay = substr($invoice_no, 0, 4) === 'IPAY';
+        $is_quotation = ($sell->status == 'draft' && ($sell->sub_status == 'quotation' || $sell->is_quotation == 1));
+
+        $doc_type_label = 'Document';
+        $doc_type_en = 'Document';
+        if ($is_vt) {
+            $doc_type_label = 'Tax-Invoice / Invoice / Delivery Order';
+            $doc_type_en = 'TAX INVOICE / INVOICE / DELIVERY ORDER';
+        } elseif ($is_ipay) {
+            $doc_type_label = 'Billing Receipt';
+            $doc_type_en = 'BILLING RECEIPT';
+        } elseif ($is_quotation) {
+            $doc_type_label = 'Quotation';
+            $doc_type_en = 'QUOTATION';
+        }
+
+        $related_ipay = null;
+        $related_vt = null;
+
+        if ($is_vt) {
+            if (! empty($sell->linked_billing_receive_id)) {
+                $related_ipay = Transaction::where('business_id', $sell->business_id)
+                    ->where('id', $sell->linked_billing_receive_id)
+                    ->first();
+            }
+            if (! $related_ipay) {
+                $related_ipay = Transaction::where('linked_tax_invoice_id', $sell->id)
+                    ->where('business_id', $sell->business_id)
+                    ->where('status', 'final')
+                    ->first();
+            }
+            if (! $related_ipay) {
+                $related_ipay = Transaction::where('transfer_parent_id', $sell->id)
+                    ->where('business_id', $sell->business_id)
+                    ->where('status', 'final')
+                    ->where('invoice_no', 'LIKE', 'IPAY%')
+                    ->first();
+            }
+            if (! $related_ipay) {
+                $payment_ref_ipay = $sell->payment_lines
+                    ->pluck('payment_ref_no')
+                    ->filter(function ($ref) {
+                        return ! empty($ref) && str_starts_with((string) $ref, 'IPAY');
+                    })
+                    ->first();
+
+                if (! empty($payment_ref_ipay)) {
+                    $related_ipay = Transaction::where('business_id', $sell->business_id)
+                        ->where('invoice_no', $payment_ref_ipay)
+                        ->first();
+                }
+            }
+        } elseif ($is_ipay) {
+            if (! empty($sell->linked_tax_invoice_id)) {
+                $related_vt = Transaction::where('business_id', $sell->business_id)
+                    ->where('id', $sell->linked_tax_invoice_id)
+                    ->first();
+            }
+            if (! $related_vt && ! empty($sell->transfer_parent_id)) {
+                $related_vt = Transaction::where('business_id', $sell->business_id)
+                    ->where('id', $sell->transfer_parent_id)
+                    ->first();
+            }
+        }
+
+        $payment_status_map = [
+            'paid' => 'Paid (ชำระเงินแล้ว)',
+            'due' => 'Due (รอดำเนินการ)',
+            'partial' => 'Partial (ชำระบางส่วน)',
+            'overdue' => 'Overdue (เกินกำหนด)',
+        ];
+        $payment_status_key = (string) ($sell->payment_status ?? '');
+        $payment_status_label = $payment_status_map[$payment_status_key] ?? $payment_status_key;
+
+        $status_label = '';
+        if ($sell->status == 'draft' && $sell->is_quotation == 1) {
+            $status_label = 'Quotation';
+        } elseif ($sell->status == 'draft' && $sell->sub_status == 'proforma') {
+            $status_label = 'Proforma';
+        } elseif ($sell->status == 'final') {
+            $status_label = 'Paid';
+        } else {
+            $statuses = Transaction::sell_statuses();
+            $status_label = $statuses[$sell->status] ?? $sell->status;
+        }
+
+        return [
+            'is_vt' => $is_vt,
+            'is_ipay' => $is_ipay,
+            'is_quotation' => $is_quotation,
+            'doc_type_label' => $doc_type_label,
+            'doc_type_en' => $doc_type_en,
+            'status_label' => $status_label,
+            'payment_status_label' => $payment_status_label,
+            'related_ipay_invoice_no' => ! empty($related_ipay->invoice_no) ? (string) $related_ipay->invoice_no : '',
+            'related_vt_invoice_no' => ! empty($related_vt->invoice_no) ? (string) $related_vt->invoice_no : '',
+        ];
+    }
+
+    private function sanitizeFilenamePart(string $value): string
+    {
+        $sanitized = preg_replace('/[^A-Za-z0-9\-_]/', '_', $value);
+        if (empty($sanitized)) {
+            return 'invoice';
+        }
+
+        return trim($sanitized, '_');
+    }
+
+    private function applyClickableHyperlink(Worksheet $sheet, string $coordinate, ?string $url): void
+    {
+        $normalized_url = $this->normalizeHyperlinkUrl($url);
+        if (empty($normalized_url)) {
+            return;
+        }
+
+        $escaped_url = str_replace('"', '""', $normalized_url);
+        $sheet->setCellValue($coordinate, '=HYPERLINK("' . $escaped_url . '","' . $escaped_url . '")');
+        $sheet->getStyle($coordinate)->getFont()->setUnderline(true);
+        $sheet->getStyle($coordinate)->getFont()->getColor()->setARGB('FF0563C1');
+    }
+
+    private function normalizeHyperlinkUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return null;
+        }
+
+        if (filter_var($url, FILTER_VALIDATE_URL)) {
+            return $url;
+        }
+
+        if (str_starts_with($url, '//')) {
+            return 'https:' . $url;
+        }
+
+        if (str_starts_with($url, '/')) {
+            return url($url);
+        }
+
+        return null;
+    }
+
+    private function isDummyLabel(?string $value): bool
+    {
+        $label = strtoupper(trim((string) $value));
+
+        return $label === '' || $label === 'DUMMY';
+    }
+
+    private function isImageSource(?string $source): bool
+    {
+        if (empty($source)) {
+            return false;
+        }
+
+        $path = parse_url($source, PHP_URL_PATH);
+        if (empty($path)) {
+            $path = $source;
+        }
+
+        $extension = strtolower(pathinfo((string) $path, PATHINFO_EXTENSION));
+        $image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+
+        return in_array($extension, $image_extensions, true);
+    }
+
+    private function resolveLocalImagePath(?string $source): ?string
+    {
+        if (empty($source)) {
+            return null;
+        }
+
+        $source = trim($source);
+        if ($source === '') {
+            return null;
+        }
+
+        if (is_file($source)) {
+            return $source;
+        }
+
+        $parsed_path = parse_url($source, PHP_URL_PATH);
+        if (! empty($parsed_path)) {
+            $local_from_url = public_path(ltrim($parsed_path, '/'));
+            if (is_file($local_from_url)) {
+                return $local_from_url;
+            }
+        }
+
+        $relative_local = public_path(ltrim($source, '/'));
+        if (is_file($relative_local)) {
+            return $relative_local;
+        }
+
+        return null;
+    }
+
+    private function tryEmbedImage(Worksheet $sheet, ?string $source, string $coordinate, int $height = 70): bool
+    {
+        $local_path = $this->resolveLocalImagePath($source);
+        if (empty($local_path) || ! is_file($local_path)) {
+            return false;
+        }
+
+        if (@getimagesize($local_path) === false) {
+            return false;
+        }
+
+        try {
+            $drawing = new Drawing();
+            $drawing->setName('Embedded Image');
+            $drawing->setDescription(basename($local_path));
+            $drawing->setPath($local_path, true);
+            $drawing->setCoordinates($coordinate);
+            $drawing->setOffsetX(4);
+            $drawing->setOffsetY(4);
+            $drawing->setHeight($height);
+            $drawing->setWorksheet($sheet);
+
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**
@@ -1282,8 +1932,11 @@ class SellController extends Controller
         //Added check because $users is of no use if enable_contact_assign if false
         $users = config('constants.enable_contact_assign') ? User::forDropdown($business_id, false, false, false, true) : [];
 
+        // Get customer sources for radio buttons (full objects with logo)
+        $customer_sources = \App\CustomerSource::getActiveForBusiness($business_id);
+
         return view('sell.edit')
-            ->with(compact('business_details', 'taxes', 'sell_details', 'transaction', 'commission_agent', 'types', 'customer_groups', 'pos_settings', 'waiters', 'invoice_schemes', 'default_invoice_schemes', 'redeem_details', 'edit_discount', 'edit_price', 'shipping_statuses', 'warranties', 'statuses', 'sales_orders', 'payment_types', 'accounts', 'payment_lines', 'change_return', 'is_order_request_enabled', 'customer_due', 'users'));
+            ->with(compact('business_details', 'taxes', 'sell_details', 'transaction', 'commission_agent', 'types', 'customer_groups', 'pos_settings', 'waiters', 'invoice_schemes', 'default_invoice_schemes', 'redeem_details', 'edit_discount', 'edit_price', 'shipping_statuses', 'warranties', 'statuses', 'sales_orders', 'payment_types', 'accounts', 'payment_lines', 'change_return', 'is_order_request_enabled', 'customer_due', 'users', 'customer_sources'));
     }
 
     /**
@@ -1367,6 +2020,7 @@ class SellController extends Controller
                     'transactions.id',
                     'transaction_date',
                     'invoice_no',
+                    'transactions.final_total',
                     'contacts.name',
                     'contacts.mobile',
                     'contacts.supplier_business_name',
@@ -1558,6 +2212,7 @@ class SellController extends Controller
                     return $invoice_no;
                 })
                 ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
+                ->editColumn('final_total', '<span class="display_currency" data-currency_symbol="true">{{$final_total}}</span>')
                 ->editColumn('total_items', '{{@format_quantity($total_items)}}')
                 ->editColumn('total_quantity', '{{@format_quantity($total_quantity)}}')
                 ->addColumn('conatct_name', '@if(!empty($supplier_business_name)) {{$supplier_business_name}}, <br>@endif {{$name}}')
@@ -1578,7 +2233,7 @@ class SellController extends Controller
                             return '';
                         }
                     }, ])
-                ->rawColumns(['action', 'invoice_no', 'transaction_date', 'conatct_name'])
+                ->rawColumns(['action', 'invoice_no', 'transaction_date', 'final_total', 'conatct_name'])
                 ->make(true);
         }
     }
@@ -1851,6 +2506,90 @@ class SellController extends Controller
     }
 
     /**
+     * Single-document summary mode:
+     * Always show VT-side rows only (one row per sale), even when IPAY exists.
+     */
+    private function applySummarySalesBaseVtFilter($sells): void
+    {
+        $sells->where(function ($query) {
+            $query->where('transactions.invoice_no', 'LIKE', 'VT%')
+                ->orWhere('transactions.document_type', 'proforma')
+                ->orWhere('transactions.sub_status', 'proforma');
+        });
+    }
+
+    /**
+     * Billing-Receive view in single-document mode:
+     * VT rows with payment received, plus legacy linked IPAY fallback.
+     */
+    private function applySummarySalesBillingReceiveFilter($sells): void
+    {
+        $sells->where(function ($query) {
+            $query->whereExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('transaction_payments as tp')
+                    ->whereColumn('tp.transaction_id', 'transactions.id')
+                    ->where('tp.is_return', 0)
+                    ->where('tp.amount', '>', 0);
+            })
+                ->orWhereNotNull('transactions.linked_billing_receive_id')
+                ->orWhereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('transactions as br')
+                        ->whereColumn('br.business_id', 'transactions.business_id')
+                        ->where('br.type', 'sell')
+                        ->where('br.invoice_no', 'LIKE', 'IPAY%')
+                        ->whereColumn('br.transfer_parent_id', 'transactions.id');
+                })
+                ->orWhereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('transactions as br')
+                        ->whereColumn('br.business_id', 'transactions.business_id')
+                        ->where('br.type', 'sell')
+                        ->where('br.invoice_no', 'LIKE', 'IPAY%')
+                        ->whereColumn('br.linked_tax_invoice_id', 'transactions.id');
+                });
+        });
+    }
+
+    /**
+     * Hide ad-hoc/local VT rows that are not part of synced flow and have no billing relation.
+     * This keeps summary-sales focused on canonical synced VT/IPAY documents.
+     */
+    private function applySummarySalesCanonicalOnlyFilter($sells): void
+    {
+        $sells->where(function ($query) {
+            $query->whereNotNull('transactions.old_pos_sale_id')
+                ->orWhere('transactions.sync_source', 'old_pos')
+                ->orWhereNotNull('transactions.linked_billing_receive_id')
+                ->orWhereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('transactions as br')
+                        ->whereColumn('br.business_id', 'transactions.business_id')
+                        ->where('br.type', 'sell')
+                        ->where('br.invoice_no', 'LIKE', 'IPAY%')
+                        ->where(function ($q) {
+                            $q->whereColumn('br.transfer_parent_id', 'transactions.id')
+                                ->orWhereColumn('br.linked_tax_invoice_id', 'transactions.id');
+                        });
+                });
+        });
+    }
+
+    private function applySummarySalesPaymentStatusFilter($sells, ?string $paymentStatusFilter): void
+    {
+        $is_overdue_filter = $paymentStatusFilter == 'overdue';
+        if (!empty($paymentStatusFilter) && !$is_overdue_filter) {
+            $sells->where('transactions.payment_status', $paymentStatusFilter);
+        } elseif ($is_overdue_filter) {
+            $sells->whereIn('transactions.payment_status', ['due', 'partial'])
+                ->whereNotNull('transactions.pay_term_number')
+                ->whereNotNull('transactions.pay_term_type')
+                ->whereRaw("IF(transactions.pay_term_type='days', DATE_ADD(transactions.transaction_date, INTERVAL transactions.pay_term_number DAY) < CURDATE(), DATE_ADD(transactions.transaction_date, INTERVAL transactions.pay_term_number MONTH) < CURDATE())");
+        }
+    }
+
+    /**
      * Get summary sales data for DataTables (Final Bills + Proforma Invoices only)
      */
     public function getSummarySalesData()
@@ -1865,44 +2604,16 @@ class SellController extends Controller
 
             $sells = $this->transactionUtil->getListSells($business_id);
 
-            // Apply document type filter based on invoice_no prefix (VT = Tax-Invoice, IPAY = Billing-Receive)
+            // Single-document mode: VT rows are canonical; IPAY rows are hidden from list.
             $document_filter = request()->get('document_filter', 'both');
             $payment_status_filter = request()->input('payment_status');
-            $is_overdue_filter = $payment_status_filter == 'overdue';
+            $this->applySummarySalesBaseVtFilter($sells);
+            $this->applySummarySalesCanonicalOnlyFilter($sells);
 
-            if ($document_filter == 'tax_invoice') {
-                // Show only Tax-Invoice (VT) - filter by invoice_no starting with 'VT'
-                $sells->where('transactions.invoice_no', 'LIKE', 'VT%');
-            } elseif ($document_filter == 'billing_receive') {
-                // Show only Billing-Receive (IPAY) - filter by invoice_no starting with 'IPAY'
-                $sells->where('transactions.invoice_no', 'LIKE', 'IPAY%');
-
-                // Apply payment status filter to billing receives only
-                if (!empty($payment_status_filter) && !$is_overdue_filter) {
-                    $sells->where('transactions.payment_status', $payment_status_filter);
-                } elseif ($is_overdue_filter) {
-                    $sells->whereIn('transactions.payment_status', ['due', 'partial'])
-                        ->whereNotNull('transactions.pay_term_number')
-                        ->whereNotNull('transactions.pay_term_type')
-                        ->whereRaw("IF(transactions.pay_term_type='days', DATE_ADD(transactions.transaction_date, INTERVAL transactions.pay_term_number DAY) < CURDATE(), DATE_ADD(transactions.transaction_date, INTERVAL transactions.pay_term_number MONTH) < CURDATE())");
-                }
-            } else {
-                // Default: Show both VT (Tax-Invoice) and IPAY (Billing-Receive)
-                $sells->where(function($query) {
-                    $query->where('transactions.invoice_no', 'LIKE', 'VT%')
-                          ->orWhere('transactions.invoice_no', 'LIKE', 'IPAY%');
-                });
-
-                // Apply payment status filter if set
-                if (!empty($payment_status_filter) && !$is_overdue_filter) {
-                    $sells->where('transactions.payment_status', $payment_status_filter);
-                } elseif ($is_overdue_filter) {
-                    $sells->whereIn('transactions.payment_status', ['due', 'partial'])
-                        ->whereNotNull('transactions.pay_term_number')
-                        ->whereNotNull('transactions.pay_term_type')
-                        ->whereRaw("IF(transactions.pay_term_type='days', DATE_ADD(transactions.transaction_date, INTERVAL transactions.pay_term_number DAY) < CURDATE(), DATE_ADD(transactions.transaction_date, INTERVAL transactions.pay_term_number MONTH) < CURDATE())");
-                }
+            if ($document_filter == 'billing_receive') {
+                $this->applySummarySalesBillingReceiveFilter($sells);
             }
+            $this->applySummarySalesPaymentStatusFilter($sells, $payment_status_filter);
 
             $permitted_locations = auth()->user()->permitted_locations();
             if ($permitted_locations != 'all') {
@@ -1925,8 +2636,6 @@ class SellController extends Controller
                 $location_id = request()->location_id;
                 $sells->where('transactions.location_id', $location_id);
             }
-
-            // Skip payment status filtering here since it's already handled in document type filter above
 
             if (!empty(request()->start_date) && !empty(request()->end_date)) {
                 $start = request()->start_date;
@@ -1969,7 +2678,9 @@ class SellController extends Controller
                 $sells->where('transactions.created_by', request()->session()->get('user.id'));
             }
 
-            $sells->addSelect('transactions.is_direct_sale', 'transactions.res_table_id', 'transactions.res_waiter_id', 'transactions.additional_notes');
+            $sells->addSelect('transactions.is_direct_sale', 'transactions.res_table_id', 'transactions.res_waiter_id', 'transactions.additional_notes', 'transactions.linked_billing_receive_id');
+            $sells->addSelect(DB::raw('SUM((tsl.quantity - tsl.quantity_returned) * tsl.item_tax) as line_tax_total'));
+            $sells->addSelect(DB::raw('SUM((tsl.quantity - tsl.quantity_returned) * (tsl.unit_price_inc_tax - tsl.unit_price)) as calc_line_tax_total'));
 
             $sells->groupBy('transactions.id');
 
@@ -2007,13 +2718,14 @@ class SellController extends Controller
 
                     $html .= '<li class="divider"></li>';
 
-                    if ($row->status == 'final') {
-                        $html .= '<li><a href="#" class="print-invoice-api" data-id="' . $row->id . '" data-document-type="final"><i class="fas fa-print" aria-hidden="true"></i>' . __("lang_v1.print_invoice") . '</a></li>';
-                    }
+                    $invoice_no = (string) ($row->invoice_no ?? '');
+                    $is_vt_document = str_starts_with($invoice_no, 'VT') || $row->document_type == 'proforma' || $row->sub_status == 'proforma';
 
-                    if ($row->document_type == 'proforma' || $row->sub_status == 'proforma') {
+                    if ($is_vt_document) {
                         $html .= '<li><a href="#" class="print-invoice-api" data-id="' . $row->id . '" data-document-type="proforma"><i class="fas fa-print" aria-hidden="true"></i>' . __("lang_v1.print_proforma") . '</a></li>';
-                        $html .= '<li><a href="#" class="create-billing-receipt" data-id="' . $row->id . '"><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i> ' . __("lang_v1.create_billing_receive") . '</a></li>';
+                        $html .= '<li><a href="#" class="print-invoice-api" data-id="' . $row->id . '" data-document-type="final"><i class="fas fa-print" aria-hidden="true"></i>' . __("lang_v1.print_invoice") . '</a></li>';
+                    } elseif ($row->status == 'final') {
+                        $html .= '<li><a href="#" class="print-invoice-api" data-id="' . $row->id . '" data-document-type="final"><i class="fas fa-print" aria-hidden="true"></i>' . __("lang_v1.print_invoice") . '</a></li>';
                     }
 
                     $html .= '</ul></div>';
@@ -2025,7 +2737,20 @@ class SellController extends Controller
                     return '<span class="display_currency final_total" data-currency_symbol="true">' . $row->final_total . '</span>';
                 })
                 ->editColumn('tax_amount', function ($row) {
-                    return '<span class="display_currency" data-currency_symbol="true">' . $row->tax_amount . '</span>';
+                    $tax_amount = (float) ($row->tax_amount ?? 0);
+                    if ($tax_amount <= 0 && !empty($row->line_tax_total)) {
+                        $tax_amount = (float) $row->line_tax_total;
+                    }
+                    if ($tax_amount <= 0 && !empty($row->calc_line_tax_total)) {
+                        $tax_amount = (float) $row->calc_line_tax_total;
+                    }
+                    if ($tax_amount <= 0 && isset($row->final_total, $row->total_before_tax)) {
+                        $tax_amount = (float) $row->final_total - (float) $row->total_before_tax;
+                    }
+                    if ($tax_amount < 0) {
+                        $tax_amount = 0;
+                    }
+                    return '<span class="display_currency" data-currency_symbol="true">' . $tax_amount . '</span>';
                 })
                 ->editColumn('total_paid', function ($row) {
                     $total_paid = 0;
@@ -2063,9 +2788,12 @@ class SellController extends Controller
                 })
                 ->editColumn('payment_status', function ($row) {
                     $payment_status = Transaction::getPaymentStatus($row);
+                    if (empty($payment_status)) {
+                        $payment_status = 'due';
+                    }
                     $clickable_class = '';
                     $click_data = '';
-                    
+
                     // Add click handlers based on payment status
                     if ($payment_status == 'due' || $payment_status == 'partial') {
                         $clickable_class = 'clickable-payment-status add_payment_modal';
@@ -2107,10 +2835,7 @@ class SellController extends Controller
                     // Determine document type based on invoice_no prefix
                     $invoiceNo = $row->invoice_no ?? '';
 
-                    if (substr($invoiceNo, 0, 4) === 'IPAY') {
-                        // IPAY = Billing-Received
-                        return '<span class="label bg-green">Billing-Received</span>';
-                    } elseif (substr($invoiceNo, 0, 2) === 'VT') {
+                    if (substr($invoiceNo, 0, 2) === 'VT') {
                         // VT = Tax-Invoice
                         return '<span class="label bg-red">Tax-Invoice</span>';
                     } elseif ($row->document_type == 'proforma' || $row->sub_status == 'proforma') {
@@ -2155,14 +2880,13 @@ class SellController extends Controller
         $currentMonth = date('m');
         $currentYear = date('Y');
 
-        // Base query for VT and IPAY invoices
-        // VT (Tax-Invoice) = invoice_no starts with 'VT'
-        // IPAY (Billing-Receipt) = invoice_no starts with 'IPAY'
+        // Single-document mode: use VT rows as canonical sales records.
         $baseQuery = Transaction::where('business_id', $business_id)
             ->where('type', 'sell')
             ->where(function($query) {
                 $query->where('invoice_no', 'LIKE', 'VT%')
-                      ->orWhere('invoice_no', 'LIKE', 'IPAY%');
+                    ->orWhere('document_type', 'proforma')
+                    ->orWhere('sub_status', 'proforma');
             });
 
         // Apply location permission
@@ -2240,6 +2964,189 @@ class SellController extends Controller
     }
 
     /**
+     * Export Summary Sales data to CSV or XLSX
+     *
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse|\Illuminate\Http\Response
+     */
+    public function exportSummarySales()
+    {
+        if (!auth()->user()->can('sell.view') && !auth()->user()->can('sell.create')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = request()->session()->get('user.business_id');
+        $is_admin = $this->businessUtil->is_admin(auth()->user());
+        $format = request()->get('format', 'csv');
+        $allColumns = [
+            'date' => 'Date',
+            'invoice_no' => 'Invoice No',
+            'document_type' => 'Document Type',
+            'customer' => 'Customer',
+            'location' => 'Location',
+            'payment_status' => 'Payment Status',
+            'total_amount' => 'Total Amount',
+            'total_paid' => 'Total Paid',
+            'total_remaining' => 'Total Remaining',
+            'tax' => 'Tax',
+        ];
+
+        $columnsParam = request()->get('columns');
+        if (is_string($columnsParam)) {
+            $selectedColumns = array_filter(explode(',', $columnsParam));
+        } elseif (is_array($columnsParam)) {
+            $selectedColumns = $columnsParam;
+        } else {
+            $selectedColumns = [];
+        }
+        $selectedColumns = array_values(array_filter($selectedColumns, function ($key) use ($allColumns) {
+            return array_key_exists($key, $allColumns);
+        }));
+        if (empty($selectedColumns)) {
+            $selectedColumns = array_keys($allColumns);
+        }
+
+        // Build query using the same logic as getSummarySalesData
+        $sells = $this->transactionUtil->getListSells($business_id);
+        $sells->addSelect(DB::raw('SUM((tsl.quantity - tsl.quantity_returned) * tsl.item_tax) as line_tax_total'));
+        $sells->addSelect(DB::raw('SUM((tsl.quantity - tsl.quantity_returned) * (tsl.unit_price_inc_tax - tsl.unit_price)) as calc_line_tax_total'));
+
+        // Apply document type filter (single-document mode)
+        $document_filter = request()->get('document_filter', 'both');
+        $payment_status_filter = request()->input('payment_status');
+
+        $this->applySummarySalesBaseVtFilter($sells);
+        if ($document_filter == 'billing_receive') {
+            $this->applySummarySalesBillingReceiveFilter($sells);
+        }
+        $this->applySummarySalesPaymentStatusFilter($sells, $payment_status_filter);
+
+        // Apply location permission
+        $permitted_locations = auth()->user()->permitted_locations();
+        if ($permitted_locations != 'all') {
+            $sells->whereIn('transactions.location_id', $permitted_locations);
+        }
+
+        // Apply filters
+        if (!empty(request()->customer_id)) {
+            $sells->where('contacts.id', request()->customer_id);
+        }
+        if (!empty(request()->location_id)) {
+            $sells->where('transactions.location_id', request()->location_id);
+        }
+
+        // Date range filter
+        if (!empty(request()->start_date) && !empty(request()->end_date)) {
+            $start = request()->start_date;
+            $end = request()->end_date;
+            $sells->whereDate('transactions.transaction_date', '>=', $start)
+                  ->whereDate('transactions.transaction_date', '<=', $end);
+        }
+
+        // Apply own sell view restriction
+        if (!$is_admin && request()->session()->get('user.view_own_sell_only') == 1) {
+            $sells->where('transactions.created_by', request()->session()->get('user.id'));
+        }
+
+        $sells->groupBy('transactions.id');
+
+        // Get the data
+        $data = $sells->get();
+
+        // Prepare export data
+        $exportData = [];
+        foreach ($data as $row) {
+            // Determine document type
+            $invoiceNo = $row->invoice_no ?? '';
+            if (substr($invoiceNo, 0, 2) === 'VT') {
+                $docType = 'Tax-Invoice';
+            } elseif ($row->document_type == 'proforma' || $row->sub_status == 'proforma') {
+                $docType = 'Tax-Invoice';
+            } else {
+                $docType = 'Other';
+            }
+
+            // Calculate totals
+            $total_paid = !empty($row->total_paid) ? $row->total_paid - $row->total_change_return : 0;
+            $total_remaining = $row->final_total - $row->total_paid + $row->total_change_return;
+
+            // Get payment status
+            $payment_status = Transaction::getPaymentStatus($row);
+
+            $tax_amount = (float) ($row->tax_amount ?? 0);
+            if ($tax_amount <= 0 && !empty($row->line_tax_total)) {
+                $tax_amount = (float) $row->line_tax_total;
+            }
+            if ($tax_amount <= 0 && !empty($row->calc_line_tax_total)) {
+                $tax_amount = (float) $row->calc_line_tax_total;
+            }
+            if ($tax_amount <= 0 && isset($row->final_total, $row->total_before_tax)) {
+                $tax_amount = (float) $row->final_total - (float) $row->total_before_tax;
+            }
+            if ($tax_amount < 0) {
+                $tax_amount = 0;
+            }
+
+            $rowData = [
+                'date' => $this->transactionUtil->format_date($row->transaction_date, true),
+                'invoice_no' => $row->invoice_no,
+                'document_type' => $docType,
+                'customer' => $row->name ?? '',
+                'location' => $row->location_name ?? '',
+                'payment_status' => ucfirst($payment_status),
+                'total_amount' => number_format($row->final_total, 2),
+                'total_paid' => number_format($total_paid, 2),
+                'total_remaining' => number_format($total_remaining, 2),
+                'tax' => number_format($tax_amount, 2),
+            ];
+
+            $exportRow = [];
+            foreach ($selectedColumns as $key) {
+                $exportRow[$allColumns[$key]] = $rowData[$key] ?? '';
+            }
+            $exportData[] = $exportRow;
+        }
+
+        // Generate filename
+        $startDate = request()->start_date ?? date('Y-m-d');
+        $endDate = request()->end_date ?? date('Y-m-d');
+        $filename = 'summary_sales_' . $startDate . '_to_' . $endDate;
+
+        if ($format === 'xlsx') {
+            // Export as XLSX
+            if (ob_get_contents()) {
+                ob_end_clean();
+            }
+            ob_start();
+
+            return collect($exportData)->downloadExcel(
+                $filename . '.xlsx',
+                null,
+                true
+            );
+        } else {
+            // Export as CSV
+            return response()->streamDownload(function () use ($exportData) {
+                $output = fopen('php://output', 'w');
+
+                // Add BOM for UTF-8
+                fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+
+                // Add headers
+                if (!empty($exportData)) {
+                    fputcsv($output, array_keys($exportData[0]));
+                }
+
+                // Add data rows
+                foreach ($exportData as $row) {
+                    fputcsv($output, $row);
+                }
+
+                fclose($output);
+            }, $filename . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }
+    }
+
+    /**
      * Get related IPAY invoice for a VT transaction
      *
      * @param int $id - VT transaction ID
@@ -2285,14 +3192,74 @@ class SellController extends Controller
                     ->first();
             }
 
+            // Method 3: Reverse link on IPAY (linked_tax_invoice_id -> VT id)
+            if (!$ipay_transaction) {
+                $ipay_transaction = Transaction::where('business_id', $business_id)
+                    ->where('linked_tax_invoice_id', $id)
+                    ->where('invoice_no', 'LIKE', 'IPAY%')
+                    ->orderBy('created_at', 'DESC')
+                    ->first();
+            }
+
+            // Method 4: payment_ref_no from transaction_payments (authoritative for migrated/synced bills)
+            // Example: VT2026/0370 -> payment_ref_no IPAY2026/11174
+            $payment_ref_ipay = null;
+            if (!$ipay_transaction) {
+                $payment_ref_ipay = (string) DB::table('transaction_payments')
+                    ->where('transaction_id', $vt_transaction->id)
+                    ->whereNotNull('payment_ref_no')
+                    ->where('payment_ref_no', 'LIKE', 'IPAY%')
+                    ->orderByDesc('id')
+                    ->value('payment_ref_no');
+                $payment_ref_ipay = trim($payment_ref_ipay);
+            }
+
+            if (!$ipay_transaction && $payment_ref_ipay !== '') {
+                $ipay_transaction = Transaction::where('business_id', $business_id)
+                    ->where('invoice_no', $payment_ref_ipay)
+                    ->orderBy('created_at', 'DESC')
+                    ->first();
+            }
+
             if ($ipay_transaction) {
                 return response()->json([
                     'success' => true,
                     'ipay' => [
                         'id' => $ipay_transaction->id,
                         'invoice_no' => $ipay_transaction->invoice_no,
-                        'final_total' => $ipay_transaction->final_total
+                        'final_total' => $ipay_transaction->final_total,
+                        'synthetic' => false,
+                        'source' => 'transaction',
                     ]
+                ]);
+            }
+
+            // Method 5: No IPAY transaction row, but payment_ref_no already carries the real IPAY number.
+            // Return a synthetic mapping using VT transaction id for print context.
+            if ($payment_ref_ipay !== '') {
+                return response()->json([
+                    'success' => true,
+                    'ipay' => [
+                        'id' => $vt_transaction->id,
+                        'invoice_no' => $payment_ref_ipay,
+                        'final_total' => $vt_transaction->final_total,
+                        'synthetic' => true,
+                        'source' => 'payment_ref_no',
+                    ]
+                ]);
+            }
+
+            // Method 6: Paid VT fallback (only confirms payment status; no IPAY reference found)
+            $received_payment_total = (float) DB::table('transaction_payments')
+                ->where('transaction_id', $vt_transaction->id)
+                ->where('is_return', 0)
+                ->sum('amount');
+            $has_received_payment = $received_payment_total > 0 || in_array((string) $vt_transaction->payment_status, ['paid', 'partial'], true);
+
+            if ($has_received_payment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment exists but no IPAY reference found in payment_ref_no'
                 ]);
             }
 
@@ -2351,6 +3318,24 @@ class SellController extends Controller
                 $vt_transaction = Transaction::where('business_id', $business_id)
                     ->where('id', $ipay_transaction->transfer_parent_id)
                     ->where('invoice_no', 'LIKE', 'VT%')
+                    ->first();
+            }
+
+            // Method 3: Reverse link on VT (linked_billing_receive_id -> IPAY id)
+            if (!$vt_transaction) {
+                $vt_transaction = Transaction::where('business_id', $business_id)
+                    ->where('linked_billing_receive_id', $ipay_transaction->id)
+                    ->where('invoice_no', 'LIKE', 'VT%')
+                    ->orderBy('created_at', 'DESC')
+                    ->first();
+            }
+
+            // Method 4: Invoice-number equivalent (IPAY2026/0394 -> VT2026/0394)
+            if (!$vt_transaction && !empty($ipay_transaction->invoice_no) && str_starts_with($ipay_transaction->invoice_no, 'IPAY')) {
+                $vt_equivalent = 'VT' . substr($ipay_transaction->invoice_no, 4);
+                $vt_transaction = Transaction::where('business_id', $business_id)
+                    ->where('invoice_no', $vt_equivalent)
+                    ->orderBy('created_at', 'DESC')
                     ->first();
             }
 

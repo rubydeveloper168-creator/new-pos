@@ -10,6 +10,8 @@
 	      			<div class="col-sm-4 invoice-col">
 	      				<b>@lang('product.sku'):</b>
 						{{$product->sku }}<br>
+						<b>Second Name:</b>
+						{{ !empty($product->second_name) ? $product->second_name : '--' }}<br>
 						<b>@lang('product.brand'): </b>
 						{{$product->brand->name ?? '--' }}<br>
 						<b>@lang('product.unit'): </b>

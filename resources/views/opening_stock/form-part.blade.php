@@ -73,7 +73,7 @@
 		<div class="input-group">
 		  {!! Form::text('stocks[' . $key . '][' . $variation->id . '][' . $sub_key . '][quantity]', @format_quantity($qty) , ['class' => 'form-control input-sm input_number purchase_quantity input_quantity', 'required']); !!}
 		  <span class="input-group-addon">
-		    {{ $product->unit->short_name }}
+		    {{ optional($product->unit)->short_name }}
 		  </span>
 		</div>
 		@if(!empty($product->second_unit))
@@ -119,9 +119,9 @@
 					<td>
 					<div class="input-group">
 	              		<input class="form-control input-sm input_number purchase_quantity" required="" name="stocks[{{$key}}][{{$variation->id}}][__subkey__][quantity]" type="text" value="0">
-			              <span class="input-group-addon">
-			                {{ $product->unit->short_name }}
-			              </span>
+				              <span class="input-group-addon">
+				                {{ optional($product->unit)->short_name }}
+				              </span>
 	        			</div>
 					</td>
 	<td>

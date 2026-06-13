@@ -55,7 +55,44 @@ class ProductV2Controller extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('product_v2.index', compact('hierarchical_categories', 'brands'));
+        $total_products_count = Product::where('business_id', $business_id)->count();
+
+        return view('product_v2.index', compact(
+            'hierarchical_categories',
+            'brands',
+            'total_products_count',
+            'business_id'
+        ));
+    }
+
+    /**
+     * Public listing of products with multi-level categories.
+     */
+    public function publicIndex(Request $request)
+    {
+        $business_id = $this->resolvePublicBusinessId($request);
+
+        $all_categories = Category::where('business_id', $business_id)
+            ->where('category_type', 'product')
+            ->orderBy('parent_id')
+            ->orderBy('name')
+            ->get();
+
+        $hierarchical_categories = $this->buildHierarchicalCategories($all_categories);
+
+        $brands = Brands::where('business_id', $business_id)
+            ->orderBy('name')
+            ->get();
+
+        $total_products_count = Product::where('business_id', $business_id)->count();
+
+        return view('product_v2.index', [
+            'hierarchical_categories' => $hierarchical_categories,
+            'brands' => $brands,
+            'total_products_count' => $total_products_count,
+            'business_id' => $business_id,
+            'is_public' => true,
+        ]);
     }
 
     /**
@@ -108,93 +145,11 @@ class ProductV2Controller extends Controller
     {
         try {
             $business_id = request()->session()->get('user.business_id');
-            
-            $query = Product::with([
-                'category', 'categoryL1', 'categoryL2', 'categoryL3', 'categoryL4', 'categoryL5',
-                'brand', 'unit', 'variations'
-            ])
-            ->where('business_id', $business_id)
-            ->where('is_inactive', 0);
+            $products = $this->buildProductQuery($request, $business_id)
+                ->orderBy('created_at', 'desc')
+                ->get();
 
-            // Apply filters
-            if ($request->filled('search')) {
-                $search = $request->get('search');
-                $query->where(function($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('sku', 'like', "%{$search}%");
-                });
-            }
-
-            if ($request->filled('category_id')) {
-                $category_id = $request->get('category_id');
-                $include_subcategories = $request->get('include_subcategories', false);
-                
-                if ($include_subcategories) {
-                    // Get all subcategory IDs recursively
-                    $category_ids = $this->getAllSubcategoryIds($category_id, $business_id);
-                    $category_ids[] = $category_id; // Include the parent category
-                    
-                    $query->where(function($q) use ($category_ids) {
-                        $q->whereIn('category_l1_id', $category_ids)
-                          ->orWhereIn('category_l2_id', $category_ids)
-                          ->orWhereIn('category_l3_id', $category_ids)
-                          ->orWhereIn('category_l4_id', $category_ids)
-                          ->orWhereIn('category_l5_id', $category_ids)
-                          ->orWhereIn('category_id', $category_ids); // Legacy category field
-                    });
-                } else {
-                    $query->where(function($q) use ($category_id) {
-                        $q->where('category_l1_id', $category_id)
-                          ->orWhere('category_l2_id', $category_id)
-                          ->orWhere('category_l3_id', $category_id)
-                          ->orWhere('category_l4_id', $category_id)
-                          ->orWhere('category_l5_id', $category_id)
-                          ->orWhere('category_id', $category_id); // Legacy category field
-                    });
-                }
-            }
-
-            if ($request->filled('brand_id')) {
-                $query->where('brand_id', $request->get('brand_id'));
-            }
-
-            if ($request->filled('product_type')) {
-                $query->where('type', $request->get('product_type'));
-            }
-
-            $products = $query->orderBy('created_at', 'desc')->get();
-
-            // Group by category if requested
-            if ($request->get('group_by_category', false)) {
-                $grouped = $products->groupBy(function($product) {
-                    return $product->getCategoryPath() ?: 'Uncategorized';
-                });
-                
-                // Transform grouped products
-                $transformed_grouped = [];
-                foreach ($grouped as $categoryPath => $categoryProducts) {
-                    $transformed_grouped[$categoryPath] = $categoryProducts->map(function($product) {
-                        return $this->transformProductForJson($product);
-                    });
-                }
-                
-                return response()->json([
-                    'success' => true,
-                    'grouped_products' => $transformed_grouped,
-                    'total_count' => $products->count()
-                ]);
-            }
-
-            // Transform products for JSON response
-            $transformed_products = $products->map(function($product) {
-                return $this->transformProductForJson($product);
-            });
-
-            return response()->json([
-                'success' => true,
-                'products' => $transformed_products,
-                'total_count' => $products->count()
-            ]);
+            return $this->buildProductsResponse($request, $products);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -615,6 +570,39 @@ class ProductV2Controller extends Controller
     }
 
     /**
+     * Public: Display product details in modal.
+     */
+    public function publicView(Request $request, $id)
+    {
+        try {
+            $business_id = $this->resolvePublicBusinessId($request);
+
+            $product = Product::where('business_id', $business_id)
+                        ->with([
+                            'categoryL1', 'categoryL2', 'categoryL3', 'categoryL4', 'categoryL5',
+                            'brand', 'unit', 'category', 'sub_category', 'product_tax',
+                            'variations', 'variations.product_variation', 'variations.group_prices',
+                            'variations.media', 'product_locations', 'warranty', 'media'
+                        ])
+                        ->findOrFail($id);
+
+            $rack_details = collect();
+            $combo_variations = [];
+
+            return view('product_v2.view-modal')->with(compact(
+                'product',
+                'rack_details',
+                'combo_variations'
+            ));
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error loading product details: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get products by subcategory for AJAX requests
      */
     public function getProductsBySubcategory(Request $request)
@@ -630,93 +618,54 @@ class ProductV2Controller extends Controller
                 ], 401);
             }
             
-            $query = Product::with([
-                'categoryL1', 'categoryL2', 'categoryL3', 'categoryL4', 'categoryL5',
-                'brand', 'unit', 'variations'
-            ])
-            ->where('business_id', $business_id)
-            ->where('is_inactive', 0);
+            $products = $this->buildProductQuery($request, $business_id)
+                ->orderBy('created_at', 'desc')
+                ->get();
 
-            // Apply filters
-            if ($request->filled('search')) {
-                $search = $request->get('search');
-                $query->where(function($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('sku', 'like', "%{$search}%");
-                });
-            }
+            return $this->buildProductsResponse($request, $products);
 
-            if ($request->filled('category_id')) {
-                $category_id = $request->get('category_id');
-                $include_subcategories = $request->get('include_subcategories', false);
-                
-                if ($include_subcategories) {
-                    // Get all subcategory IDs recursively
-                    $category_ids = $this->getAllSubcategoryIds($category_id, $business_id);
-                    $category_ids[] = $category_id; // Include the parent category
-                    
-                    $query->where(function($q) use ($category_ids) {
-                        $q->whereIn('category_l1_id', $category_ids)
-                          ->orWhereIn('category_l2_id', $category_ids)
-                          ->orWhereIn('category_l3_id', $category_ids)
-                          ->orWhereIn('category_l4_id', $category_ids)
-                          ->orWhereIn('category_l5_id', $category_ids)
-                          ->orWhereIn('category_id', $category_ids); // Legacy category field
-                    });
-                } else {
-                    $query->where(function($q) use ($category_id) {
-                        $q->where('category_l1_id', $category_id)
-                          ->orWhere('category_l2_id', $category_id)
-                          ->orWhere('category_l3_id', $category_id)
-                          ->orWhere('category_l4_id', $category_id)
-                          ->orWhere('category_l5_id', $category_id)
-                          ->orWhere('category_id', $category_id); // Legacy category field
-                    });
-                }
-            }
-
-            if ($request->filled('brand_id')) {
-                $query->where('brand_id', $request->get('brand_id'));
-            }
-
-            if ($request->filled('product_type')) {
-                $query->where('type', $request->get('product_type'));
-            }
-
-            $products = $query->orderBy('created_at', 'desc')->get();
-
-            // Group by category if requested
-            if ($request->get('group_by_category', false)) {
-                $grouped = $products->groupBy(function($product) {
-                    return $product->getCategoryPath() ?: 'Uncategorized';
-                });
-                
-                // Transform grouped products
-                $transformed_grouped = [];
-                foreach ($grouped as $categoryPath => $categoryProducts) {
-                    $transformed_grouped[$categoryPath] = $categoryProducts->map(function($product) {
-                        return $this->transformProductForJson($product);
-                    });
-                }
-                
-                return response()->json([
-                    'success' => true,
-                    'grouped_products' => $transformed_grouped,
-                    'total_count' => $products->count()
-                ]);
-            }
-
-            // Transform products for JSON response
-            $transformed_products = $products->map(function($product) {
-                return $this->transformProductForJson($product);
-            });
-
+        } catch (\Exception $e) {
             return response()->json([
-                'success' => true,
-                'products' => $transformed_products,
-                'total_count' => $products->count()
-            ]);
+                'success' => false,
+                'message' => 'Error fetching products by subcategory: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 
+    /**
+     * Public: Get all products with filtering for AJAX requests.
+     */
+    public function publicAll(Request $request)
+    {
+        try {
+            $business_id = $this->resolvePublicBusinessId($request);
+
+            $products = $this->buildProductQuery($request, $business_id)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return $this->buildProductsResponse($request, $products);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching products: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Public: Get products by subcategory for AJAX requests.
+     */
+    public function publicBySubcategory(Request $request)
+    {
+        try {
+            $business_id = $this->resolvePublicBusinessId($request);
+
+            $products = $this->buildProductQuery($request, $business_id)
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return $this->buildProductsResponse($request, $products);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -751,6 +700,148 @@ class ProductV2Controller extends Controller
                 'message' => 'Error fetching subcategories: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Build products query with shared filters.
+     */
+    private function buildProductQuery(Request $request, $business_id)
+    {
+        $query = Product::with([
+            'category', 'categoryL1', 'categoryL2', 'categoryL3', 'categoryL4', 'categoryL5',
+            'brand', 'unit', 'variations'
+        ])
+        ->where('business_id', $business_id)
+        ->where('is_inactive', 0);
+
+        if ($request->filled('search')) {
+            $search = $request->get('search');
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('sku', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('category_id')) {
+            $category_id = $request->get('category_id');
+
+            if ($category_id === '__uncategorized__') {
+                // Product is uncategorized when no category field has a valid value.
+                $query->where(function ($q) {
+                    $q->where(function ($nq) {
+                        $nq->whereNull('category_l1_id')->orWhere('category_l1_id', 0);
+                    })->where(function ($nq) {
+                        $nq->whereNull('category_l2_id')->orWhere('category_l2_id', 0);
+                    })->where(function ($nq) {
+                        $nq->whereNull('category_l3_id')->orWhere('category_l3_id', 0);
+                    })->where(function ($nq) {
+                        $nq->whereNull('category_l4_id')->orWhere('category_l4_id', 0);
+                    })->where(function ($nq) {
+                        $nq->whereNull('category_l5_id')->orWhere('category_l5_id', 0);
+                    })->where(function ($nq) {
+                        $nq->whereNull('category_id')->orWhere('category_id', 0);
+                    });
+                });
+            } else {
+                $include_subcategories = $this->boolValue($request->get('include_subcategories', false));
+
+                if ($include_subcategories) {
+                    $category_ids = $this->getAllSubcategoryIds($category_id, $business_id);
+                    $category_ids[] = $category_id;
+
+                    $query->where(function($q) use ($category_ids) {
+                        $q->whereIn('category_l1_id', $category_ids)
+                          ->orWhereIn('category_l2_id', $category_ids)
+                          ->orWhereIn('category_l3_id', $category_ids)
+                          ->orWhereIn('category_l4_id', $category_ids)
+                          ->orWhereIn('category_l5_id', $category_ids)
+                          ->orWhereIn('category_id', $category_ids);
+                    });
+                } else {
+                    $query->where(function($q) use ($category_id) {
+                        $q->where('category_l1_id', $category_id)
+                          ->orWhere('category_l2_id', $category_id)
+                          ->orWhere('category_l3_id', $category_id)
+                          ->orWhere('category_l4_id', $category_id)
+                          ->orWhere('category_l5_id', $category_id)
+                          ->orWhere('category_id', $category_id);
+                    });
+                }
+            }
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->get('brand_id'));
+        }
+
+        if ($request->filled('product_type')) {
+            $query->where('type', $request->get('product_type'));
+        }
+
+        return $query;
+    }
+
+    /**
+     * Build JSON response for product lists.
+     */
+    private function buildProductsResponse(Request $request, $products)
+    {
+        $group_by_category = $this->boolValue($request->get('group_by_category', false));
+
+        if ($group_by_category) {
+            $grouped = $products->groupBy(function($product) {
+                return $product->getCategoryPath() ?: 'Uncategorized';
+            });
+
+            $transformed_grouped = [];
+            foreach ($grouped as $categoryPath => $categoryProducts) {
+                $transformed_grouped[$categoryPath] = $categoryProducts->map(function($product) {
+                    return $this->transformProductForJson($product);
+                });
+            }
+
+            return response()->json([
+                'success' => true,
+                'grouped_products' => $transformed_grouped,
+                'total_count' => $products->count()
+            ]);
+        }
+
+        $transformed_products = $products->map(function($product) {
+            return $this->transformProductForJson($product);
+        });
+
+        return response()->json([
+            'success' => true,
+            'products' => $transformed_products,
+            'total_count' => $products->count()
+        ]);
+    }
+
+    /**
+     * Resolve public business id (query param, env, or fallback).
+     */
+    private function resolvePublicBusinessId(Request $request)
+    {
+        $business_id = $request->get('business_id');
+        if (!empty($business_id)) {
+            return (int) $business_id;
+        }
+
+        $env_business_id = env('PUBLIC_PRODUCTS_BUSINESS_ID');
+        if (!empty($env_business_id)) {
+            return (int) $env_business_id;
+        }
+
+        return 1;
+    }
+
+    /**
+     * Normalize boolean values from requests.
+     */
+    private function boolValue($value)
+    {
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 
     /**

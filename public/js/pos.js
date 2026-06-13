@@ -1,6 +1,164 @@
 var global_brand_id = null;
 var global_p_category_id = null;
 $(document).ready(function() {
+    function getInvoicePrefixFromPage() {
+        var invoiceValue = '';
+        var invoiceInput = document.getElementById('invoice_no');
+        if (invoiceInput && invoiceInput.value) {
+            invoiceValue = invoiceInput.value;
+        } else {
+            var invoiceDisplay = document.querySelector('h1 .text-success');
+            if (invoiceDisplay) {
+                invoiceValue = invoiceDisplay.textContent || '';
+            }
+        }
+        if (!invoiceValue) {
+            return null;
+        }
+        var match = String(invoiceValue).match(/[A-Za-z]+/);
+        return match ? match[0].toUpperCase() : null;
+    }
+
+    function getNumericValue(selector) {
+        var rawValue = $(selector).val();
+        if (rawValue === undefined || rawValue === null || rawValue === '') {
+            return 0;
+        }
+
+        var parsed = parseFloat(String(rawValue).replace(/,/g, ''));
+        return isNaN(parsed) ? 0 : parsed;
+    }
+
+    function extractTaxRateFromText(label) {
+        var match = String(label || '').trim().match(/(\d+(?:\.\d+)?)\s*%/);
+        if (!match) {
+            return 0;
+        }
+        var parsed = parseFloat(match[1]);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+
+    function extractTaxRateFromOption($option) {
+        if (!$option || !$option.length) {
+            return 0;
+        }
+
+        var fromData = parseFloat($option.data('rate'));
+        if (!isNaN(fromData) && fromData > 0) {
+            return fromData;
+        }
+
+        return extractTaxRateFromText($option.text());
+    }
+
+    function findTaxOptionByRate($taxSelect, targetRate) {
+        if (!$taxSelect || !$taxSelect.length || !(targetRate > 0)) {
+            return $();
+        }
+
+        var exact = $taxSelect.find('option').filter(function() {
+            if (!$(this).val()) {
+                return false;
+            }
+            var optionRate = extractTaxRateFromOption($(this));
+            return optionRate > 0 && Math.abs(optionRate - targetRate) < 0.0001;
+        }).first();
+        if (exact.length) {
+            return exact;
+        }
+
+        return $taxSelect.find('option').filter(function() {
+            if (!$(this).val()) {
+                return false;
+            }
+            var optionRate = extractTaxRateFromOption($(this));
+            return optionRate > 0 && Math.abs(optionRate - targetRate) < 0.05;
+        }).first();
+    }
+
+    function ensureOrderTaxForEditInvoice() {
+        var isEditForm = $('form#edit_sell_form').length > 0 || $('form#edit_pos_sell_form').length > 0;
+        if (!isEditForm) {
+            return;
+        }
+
+        var $taxCalculationAmount = $('input#tax_calculation_amount');
+        var invoicePrefix = getInvoicePrefixFromPage();
+        var forceVatFromPrefix = invoicePrefix === 'VT';
+        var $taxSelect = $('select#tax_rate_id');
+        if (!$taxSelect.length || !$taxCalculationAmount.length) {
+            return;
+        }
+
+        var transactionTaxId = ($('#transaction_tax_id').val() || '').toString();
+        var transactionTaxAmount = getNumericValue('#transaction_tax_amount');
+        var transactionTotalBeforeTax = getNumericValue('#transaction_total_before_tax');
+        var transactionTaxRate = getNumericValue('#transaction_tax_rate');
+        if (!(transactionTaxRate > 0) && transactionTaxAmount > 0 && transactionTotalBeforeTax > 0) {
+            transactionTaxRate = (transactionTaxAmount * 100) / transactionTotalBeforeTax;
+        }
+
+        var hasSavedTax = !!transactionTaxId || transactionTaxAmount > 0 || transactionTaxRate > 0;
+        if (!hasSavedTax && !forceVatFromPrefix) {
+            return;
+        }
+
+        var selectedTaxId = ($taxSelect.val() || '').toString();
+        var $selectedOption = $taxSelect.find(':selected');
+        var selectedRate = extractTaxRateFromOption($selectedOption);
+
+        if (!selectedTaxId || selectedRate <= 0) {
+            var $targetOption = $();
+            if (transactionTaxId) {
+                $targetOption = $taxSelect.find('option[value="' + transactionTaxId + '"]');
+            }
+            if (!$targetOption.length && transactionTaxRate > 0) {
+                $targetOption = findTaxOptionByRate($taxSelect, transactionTaxRate);
+            }
+            if (!$targetOption.length && forceVatFromPrefix) {
+                $targetOption = findTaxOptionByRate($taxSelect, 7);
+            }
+            if (!$targetOption.length && forceVatFromPrefix) {
+                $targetOption = $taxSelect.find('option').filter(function() {
+                    if (!$(this).val()) {
+                        return false;
+                    }
+                    var label = ($(this).text() || '').toLowerCase();
+                    return (label.indexOf('vat') !== -1 || label.indexOf('ภาษี') !== -1) &&
+                        (label.indexOf('7%') !== -1 || label.indexOf('7 %') !== -1);
+                }).first();
+            }
+
+            if ($targetOption.length) {
+                $taxSelect.val(String($targetOption.val())).trigger('change');
+                selectedTaxId = String($targetOption.val());
+                selectedRate = extractTaxRateFromOption($targetOption);
+            }
+        }
+
+        if (selectedRate <= 0 && transactionTaxRate > 0) {
+            selectedRate = transactionTaxRate;
+        } else if (selectedRate <= 0 && forceVatFromPrefix) {
+            selectedRate = 7;
+        }
+
+        // Fallback: derive rate from actual rendered product row totals
+        if (selectedRate <= 0 && transactionTaxAmount > 0) {
+            var rowSubtotal = 0;
+            $('table#pos_table tbody tr').each(function() {
+                rowSubtotal += __read_number($(this).find('input.pos_line_total'));
+            });
+            if (rowSubtotal > 0) {
+                selectedRate = (transactionTaxAmount / rowSubtotal) * 100;
+            }
+        }
+
+        if (selectedRate > 0) {
+            __write_number($taxCalculationAmount, selectedRate);
+            pos_total_row();
+        }
+    }
+
     customer_set = false;
     //Prevent enter key function except texarea
     $('form').on('keyup keypress', function(e) {
@@ -65,6 +223,40 @@ $(document).ready(function() {
     }
     if ($('form#edit_pos_sell_form').length > 0 || $('form#add_pos_sell_form').length > 0) {
         initialize_printer();
+    }
+    ensureOrderTaxForEditInvoice();
+    setTimeout(ensureOrderTaxForEditInvoice, 300);
+
+    function getPosProductDebugSnapshot() {
+        var rows = [];
+
+        $('table#pos_table tbody').find('tr.product_row').each(function() {
+            var $row = $(this);
+            var $qtyInput = $row.find('input.pos_quantity');
+            var $unitPriceIncTax = $row.find('input.pos_unit_price_inc_tax');
+            var $lotNo = $row.find('select.lot_number');
+            var productName = $.trim($row.find('td:first div[style*="font-weight:600"]').first().text());
+            var sku = $.trim($row.find('td:first div[style*="font-size:11px;color:#999"]').first().text());
+
+            rows.push({
+                row_index: $row.data('row_index'),
+                product_id: $row.data('product-id') || $row.find('input.product_id').val() || null,
+                variation_id: $row.data('variation-id') || $row.find('input.row_variation_id').val() || null,
+                product_name: productName || null,
+                sku: sku || null,
+                quantity: $qtyInput.val(),
+                max_rule: $qtyInput.data('rule-max-value'),
+                qty_available_attr: $qtyInput.data('qty_available'),
+                allow_overselling: $qtyInput.data('allow-overselling'),
+                lot_no_line_id: $lotNo.length ? $lotNo.val() : null,
+                base_unit_multiplier: $row.find('input.base_unit_multiplier').val() || null,
+                enable_stock: $row.find('input[name$=\"[enable_stock]\"]').val() || null,
+                unit_price_inc_tax: $unitPriceIncTax.length ? $unitPriceIncTax.val() : null,
+                line_total: $row.find('input.pos_line_total').val() || null
+            });
+        });
+
+        return rows;
     }
 
     $('select#select_location_id').change(function() {
@@ -200,34 +392,105 @@ $(document).ready(function() {
     set_default_customer();
 
     if ($('#search_product').length) {
+        console.log('[Product Search] Initializing autocomplete on #search_product');
+        var debugSearchResponse = function(term, location_id, price_group, search_fields, items) {
+            var rows = (items || []).map(function(item, index) {
+                var qtyRaw = item.qty_available;
+                var qtyParsed = parseFloat(qtyRaw);
+                if (isNaN(qtyParsed)) {
+                    qtyParsed = 0;
+                }
+                return {
+                    idx: index,
+                    variation_id: item.variation_id || null,
+                    product_id: item.product_id || null,
+                    sku: item.sub_sku || item.sku || null,
+                    enable_stock: item.enable_stock,
+                    qty_available_raw: qtyRaw,
+                    qty_available_parsed: qtyParsed,
+                    formatted_qty_available: item.formatted_qty_available || null,
+                    unit: item.unit || null,
+                    lot_number: item.lot_number || null,
+                    purchase_line_id: item.purchase_line_id || null,
+                    warehouse: item.location_name || item.location || null
+                };
+            });
+            var allZeroStock = rows.length > 0 && rows.every(function(row) {
+                return Number(row.enable_stock) === 1 && Number(row.qty_available_parsed) <= 0;
+            });
+
+            console.groupCollapsed('[Product Search Debug] term="' + term + '" location=' + location_id + ' results=' + rows.length);
+            console.log('[Product Search Debug] request', {
+                term: term,
+                location_id: location_id,
+                price_group: price_group,
+                search_fields: search_fields
+            });
+            console.table(rows.slice(0, 20));
+            if (allZeroStock) {
+                console.warn('[Product Search Debug] All returned items have zero/non-positive qty_available', {
+                    term: term,
+                    location_id: location_id,
+                    total_items: rows.length
+                });
+            }
+            console.groupEnd();
+        };
+
         //Add Product
         $('#search_product')
             .autocomplete({
                 delay: 1000,
+                appendTo: $('#search_product').closest('.form-group'),
                 source: function(request, response) {
+                    console.log('[Product Search] Source called with term:', request.term);
                     var price_group = '';
                     var search_fields = [];
                     $('.search_fields:checked').each(function(i){
                       search_fields[i] = $(this).val();
                     });
+                    console.log('[Product Search] Search fields:', search_fields);
 
                     if ($('#price_group').length > 0) {
                         price_group = $('#price_group').val();
                     }
+                    var location_id = $('input#location_id').val();
+                    console.log('[Product Search] Location ID:', location_id, 'Price group:', price_group);
+
                     $.getJSON(
                         '/products/list',
                         {
                             price_group: price_group,
-                            location_id: $('input#location_id').val(),
+                            location_id: location_id,
                             term: request.term,
                             not_for_selling: 0,
-                            search_fields: search_fields
+                            search_fields: search_fields,
+                            debug_stock: 1
                         },
-                        response
-                    );
+                        function(data) {
+                            console.log('[Product Search] Response received:', data);
+                            debugSearchResponse(request.term, location_id, price_group, search_fields, data || []);
+                            response(data);
+                        }
+                    ).fail(function(jqXHR, textStatus, errorThrown) {
+                        console.error('[Product Search] AJAX Error:', textStatus, errorThrown);
+                        console.error('[Product Search] Response:', jqXHR.responseText);
+                    });
                 },
                 minLength: 2,
+                open: function() {
+                    var $input = $(this);
+                    var $menu = $input.autocomplete('widget');
+                    var $group = $input.closest('.input-group');
+                    var width = $group.length ? $group.outerWidth() : $input.outerWidth();
+                    $menu.css({
+                        width: width + 'px',
+                        'max-width': width + 'px',
+                        'box-sizing': 'border-box'
+                    });
+                },
                 response: function(event, ui) {
+                    console.log('[Product Search] Response event, items:', ui.content ? ui.content.length : 0);
                     if (ui.content.length == 1) {
                         ui.item = ui.content[0];
 
@@ -240,12 +503,33 @@ $(document).ready(function() {
                             for_so = true;
                         }
 
-                        if ((ui.item.enable_stock == 1 && ui.item.qty_available > 0) || 
+                        var item_qty_check = parseFloat(ui.item.qty_available) || 0;
+                        console.log('[Product Search] Single-item decision', {
+                            term: $('#search_product').val(),
+                            variation_id: ui.item.variation_id,
+                            sku: ui.item.sub_sku,
+                            enable_stock: ui.item.enable_stock,
+                            qty_available_raw: ui.item.qty_available,
+                            qty_available_parsed: item_qty_check,
+                            is_overselling_allowed: is_overselling_allowed,
+                            for_so: for_so
+                        });
+                        if ((ui.item.enable_stock == 1 && item_qty_check > 0) ||
                                 (ui.item.enable_stock == 0) || is_overselling_allowed || for_so) {
                             $(this)
                                 .data('ui-autocomplete')
                                 ._trigger('select', 'autocompleteselect', ui);
                             $(this).autocomplete('close');
+                        } else {
+                            console.warn('[Product Search] Single-item blocked as out-of-stock', {
+                                term: $('#search_product').val(),
+                                variation_id: ui.item.variation_id,
+                                sku: ui.item.sub_sku,
+                                enable_stock: ui.item.enable_stock,
+                                qty_available_raw: ui.item.qty_available,
+                                qty_available_parsed: item_qty_check,
+                                location_id: $('input#location_id').val()
+                            });
                         }
                     } else if (ui.content.length == 0) {
                         toastr.error(LANG.no_products_found);
@@ -253,12 +537,17 @@ $(document).ready(function() {
                     }
                 },
                 focus: function(event, ui) {
-                    if (ui.item.qty_available <= 0) {
+                    var focus_qty = parseFloat(ui.item.qty_available) || 0;
+                    if (ui.item.enable_stock == 1 && focus_qty <= 0) {
                         return false;
                     }
                 },
                 select: function(event, ui) {
                     var searched_term = $(this).val();
+                    console.log('[Product Search] Select fired', {
+                        term: searched_term,
+                        item: ui.item
+                    });
                     var is_overselling_allowed = false;
                     if($('input#is_overselling_allowed').length) {
                         is_overselling_allowed = true;
@@ -274,14 +563,29 @@ $(document).ready(function() {
                         var is_draft=true;
                     }
 
-                    if (ui.item.enable_stock != 1 || ui.item.qty_available > 0 || is_overselling_allowed || for_so || is_draft) {
+                    var select_qty = parseFloat(ui.item.qty_available) || 0;
+                    if (ui.item.enable_stock != 1 || select_qty > 0 || is_overselling_allowed || for_so || is_draft) {
                         $(this).val(null);
 
                         //Pre select lot number only if the searched term is same as the lot number
                         var purchase_line_id = ui.item.purchase_line_id && searched_term == ui.item.lot_number ? ui.item.purchase_line_id : null;
                         pos_product_row(ui.item.variation_id, purchase_line_id);
                     } else {
-                        alert(LANG.out_of_stock);
+                        console.error('[Product Search] Out of stock alert', {
+                            enable_stock: ui.item.enable_stock,
+                            qty_available_raw: ui.item.qty_available,
+                            qty_available_parsed: select_qty,
+                            is_overselling_allowed: is_overselling_allowed,
+                            for_so: for_so,
+                            is_draft: is_draft,
+                            item: ui.item
+                        });
+                        alert(
+                            LANG.out_of_stock +
+                                ' | enable_stock=' + ui.item.enable_stock +
+                                ' | qty_raw=' + ui.item.qty_available +
+                                ' | qty=' + select_qty
+                        );
                     }
                 },
             })
@@ -301,8 +605,19 @@ $(document).ready(function() {
                     var is_draft=true;
                 }
 
-            if (item.enable_stock == 1 && item.qty_available <= 0 && !is_overselling_allowed && !for_so && !is_draft) {
-                var string = '<li class="ui-state-disabled">' + item.name;
+            var item_qty = parseFloat(item.qty_available) || 0;
+            var image_name = item.image ? item.image : 'no_image.png';
+            var image_base = (window.UPLOADS_IMG_BASE && window.UPLOADS_IMG_BASE.length)
+                ? window.UPLOADS_IMG_BASE.replace(/\/+$/, '')
+                : '/uploads/img';
+            var no_image_url = (window.NO_IMAGE_URL && window.NO_IMAGE_URL.length)
+                ? window.NO_IMAGE_URL
+                : (image_base + '/no_image.png');
+            var image_url = image_base + '/' + image_name;
+            var image_onerror = "this.onerror=null;this.src='" + no_image_url + "';";
+            if (item.enable_stock == 1 && item_qty <= 0 && !is_overselling_allowed && !for_so && !is_draft) {
+                var string = '<li class="ui-state-disabled"><div class="pos-search-item"><img class="pos-search-img" src="' + image_url + '" onerror="' + image_onerror + '" alt="">' +
+                    '<div class="pos-search-text">' + item.name;
                 if (item.type == 'variable') {
                     string += '-' + item.variation;
                 }
@@ -316,10 +631,11 @@ $(document).ready(function() {
                     ')' +
                     '<br> Price: ' +
                     __currency_trans_from_en(selling_price, false, false, __currency_precision, true) +
-                    ' (Out of stock) </li>';
+                    ' (Out of stock)</div></div></li>';
                 return $(string).appendTo(ul);
             } else {
-                var string = '<div>' + item.name;
+                var string = '<div class="pos-search-item"><img class="pos-search-img" src="' + image_url + '" onerror="' + image_onerror + '" alt="">' +
+                    '<div class="pos-search-text">' + item.name;
                 if (item.type == 'variable') {
                     string += '-' + item.variation;
                 }
@@ -332,9 +648,10 @@ $(document).ready(function() {
                 string += ' (' + item.sub_sku + ')' + '<br> Price: ' + __currency_trans_from_en(selling_price, false, false, __currency_precision, true);
                 if (item.enable_stock == 1) {
                     var qty_available = __currency_trans_from_en(item.qty_available, false, false, __currency_precision, true);
-                    string += ' - ' + qty_available + item.unit;
+                    var unit_label = item.unit ? item.unit : '';
+                    string += ' - ' + qty_available + unit_label;
                 }
-                string += '</div>';
+                string += '</div></div>';
 
                 return $('<li>')
                     .append(string)
@@ -574,6 +891,11 @@ $(document).ready(function() {
         var data = pos_form_obj.serialize();
         data = data + '&status=draft';
         var url = pos_form_obj.attr('action');
+        console.log('[POS Submit][draft] sending', {
+            url: url,
+            location_id: $('input#location_id').val(),
+            products_count: $('table#pos_table tbody').find('.product_row').length
+        });
 
         disable_pos_form_actions();
         $.ajax({
@@ -587,9 +909,19 @@ $(document).ready(function() {
                     reset_pos_form();
                     toastr.success(result.msg);
                 } else {
-                    toastr.error(result.msg);
+                    console.error('[POS Submit][draft] failed', result);
+                    toastr.error(result.msg + (result.trace_id ? (' (Trace: ' + result.trace_id + ')') : ''));
                 }
             },
+            error: function(xhr, status, error) {
+                enable_pos_form_actions();
+                console.error('[POS Submit][draft] ajax error', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText
+                });
+                toastr.error('Draft save failed. Please check console/network logs.');
+            }
         });
     });
 
@@ -609,6 +941,11 @@ $(document).ready(function() {
         var data = pos_form_obj.serialize();
         data = data + '&status=quotation';
         var url = pos_form_obj.attr('action');
+        console.log('[POS Submit][quotation] sending', {
+            url: url,
+            location_id: $('input#location_id').val(),
+            products_count: $('table#pos_table tbody').find('.product_row').length
+        });
 
         disable_pos_form_actions();
         $.ajax({
@@ -627,9 +964,19 @@ $(document).ready(function() {
                         pos_print(result.receipt);
                     }
                 } else {
-                    toastr.error(result.msg);
+                    console.error('[POS Submit][quotation] failed', result);
+                    toastr.error(result.msg + (result.trace_id ? (' (Trace: ' + result.trace_id + ')') : ''));
                 }
             },
+            error: function(xhr, status, error) {
+                enable_pos_form_actions();
+                console.error('[POS Submit][quotation] ajax error', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText
+                });
+                toastr.error('Quotation save failed. Please check console/network logs.');
+            }
         });
     });
 
@@ -866,6 +1213,17 @@ $(document).ready(function() {
                 var data = $(form).serialize();
                 data = data + '&status=final';
                 var url = $(form).attr('action');
+                var productDebugSnapshot = getPosProductDebugSnapshot();
+                console.log('[POS Submit][final] sending', {
+                    url: url,
+                    location_id: $('input#location_id').val(),
+                    products_count: $('table#pos_table tbody').find('.product_row').length,
+                    total_payable: __read_number($('input#final_total_input')),
+                    total_paying: __read_number($('input#total_paying_input')),
+                    status_input: $('input#status').val(),
+                    contact_id: $('select#customer_id').val(),
+                    products: productDebugSnapshot
+                });
                 $.ajax({
                     method: 'POST',
                     url: url,
@@ -886,11 +1244,29 @@ $(document).ready(function() {
                                 pos_print(result.receipt);
                             }
                         } else {
-                            toastr.error(result.msg);
+                            console.error('[POS Submit][final] failed', result);
+                            console.error('[POS Submit][final] failed details', {
+                                trace_id: result.trace_id || null,
+                                msg: result.msg || null,
+                                debug_context: result.debug_context || null,
+                                request_products: productDebugSnapshot
+                            });
+                            toastr.error(result.msg + (result.trace_id ? (' (Trace: ' + result.trace_id + ')') : ''));
                         }
 
                         enable_pos_form_actions();
                     },
+                    error: function(xhr, status, error) {
+                        enable_pos_form_actions();
+                        console.error('[POS Submit][final] ajax error', {
+                            status: status,
+                            error: error,
+                            responseText: xhr.responseText,
+                            responseJSON: xhr.responseJSON || null,
+                            request_products: productDebugSnapshot
+                        });
+                        toastr.error('Final save failed. Please check console/network logs.');
+                    }
                 });
             }
             return false;
@@ -984,7 +1360,9 @@ $(document).ready(function() {
     });
 
     $(document).on('click', '.add_new_customer', function() {
-        $('#customer_id').select2('close');
+        if ($('#customer_id').data('select2')) {
+            $('#customer_id').select2('close');
+        }
         var name = $(this).data('name');
         $('.contact_modal')
             .find('input#name')
@@ -1078,10 +1456,21 @@ $(document).ready(function() {
         pos_total_row();
     });
     $('select#tax_rate_id').change(function() {
-        var tax_rate = $(this)
-            .find(':selected')
-            .data('rate');
-        __write_number($('input#tax_calculation_amount'), tax_rate);
+        var selectedTaxId = ($(this).val() || '').toString();
+        if (!selectedTaxId) {
+            __write_number($('input#tax_calculation_amount'), 0);
+            pos_total_row();
+            return;
+        }
+
+        var tax_rate = extractTaxRateFromOption($(this).find(':selected'));
+        if (!(tax_rate > 0)) {
+            var existingRate = getNumericValue('#tax_calculation_amount');
+            if (existingRate > 0) {
+                tax_rate = existingRate;
+            }
+        }
+        __write_number($('input#tax_calculation_amount'), tax_rate > 0 ? tax_rate : 0);
         pos_total_row();
     });
     //Datetime picker
@@ -1598,6 +1987,7 @@ function get_product_suggestion_list(category_id, brand_id, location_id, url = n
             category_id: category_id,
             brand_id: brand_id,
             location_id: location_id,
+            is_direct_sale: $('input[name="is_direct_sale"]').length > 0 ? $('input[name="is_direct_sale"]').val() : 0,
             page: page,
             is_enabled_stock: is_enabled_stock,
             repair_model_id: repair_model_id
@@ -1792,12 +2182,40 @@ function pos_product_row(variation_id = null, purchase_line_id = null, weighing_
                     //scroll bottom of items list
                     $(".pos_product_div").animate({ scrollTop: $('.pos_product_div').prop("scrollHeight")}, 1000);
                 } else {
+                    console.error('[POS Row] Failed to add product row', {
+                        variation_id: variation_id,
+                        purchase_line_id: purchase_line_id,
+                        location_id: location_id,
+                        quantity: quantity,
+                        is_draft: is_draft,
+                        is_sales_order: is_sales_order,
+                        disable_qty_alert: disable_qty_alert,
+                        price_group: price_group,
+                        customer_id: customer_id,
+                        response: result
+                    });
                     toastr.error(result.msg);
                     $('input#search_product')
                         .focus()
                         .select();
                 }
             },
+            error: function(xhr, status, error) {
+                console.error('[POS Row] AJAX error', {
+                    variation_id: variation_id,
+                    purchase_line_id: purchase_line_id,
+                    location_id: location_id,
+                    quantity: quantity,
+                    is_draft: is_draft,
+                    is_sales_order: is_sales_order,
+                    disable_qty_alert: disable_qty_alert,
+                    price_group: price_group,
+                    customer_id: customer_id,
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText
+                });
+            }
         });
     }
 }
@@ -2270,7 +2688,9 @@ function addSelect2CloseControl($selectElement) {
     $closeButton.on('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        $selectElement.select2('close');
+        if ($selectElement.data('select2')) {
+            $selectElement.select2('close');
+        }
     });
 
     $dropdown.prepend($closeButton);
@@ -2633,10 +3053,18 @@ $(document).on('change', '.payment_types_dropdown', function(e) {
                 $('select#select_location_id')
                 .find(':selected')
                 .data('default_payment_accounts') : $('#location_id').data('default_payment_accounts');
+    if (typeof default_accounts === 'string') {
+        try {
+            default_accounts = JSON.parse(default_accounts);
+        } catch (e) {
+            default_accounts = {};
+        }
+    }
+    default_accounts = default_accounts || {};
     var payment_type = $(this).val();
     var payment_row = $(this).closest('.payment_row');
     if (payment_type && payment_type != 'advance') {
-        var default_account = default_accounts && default_accounts[payment_type]['account'] ? 
+        var default_account = default_accounts[payment_type] && default_accounts[payment_type]['account'] ? 
             default_accounts[payment_type]['account'] : '';
         var row_index = payment_row.find('.payment_row_index').val();
 
@@ -2757,6 +3185,10 @@ function update_shipping_address(data) {
         var address = [];
         if (data.supplier_business_name) {
             address.push(data.supplier_business_name);
+        }
+        // Add Tax ID if available
+        if (data.tax_number) {
+            address.push('<br>' + LANG.tax_no + ': ' + data.tax_number);
         }
         if (data.name) {
             address.push('<br>' + data.name);
@@ -3283,7 +3715,7 @@ function ensureProformaStatus() {
         if (transaction_status == 'draft' && transaction_sub_status == 'proforma') {
             statusDropdown.val('proforma');
             statusDropdown.trigger('change');
-            console.log('✅ Status automatically set to proforma on edit load');
+            console.log(' Status automatically set to proforma on edit load');
             return true;
         }
     }

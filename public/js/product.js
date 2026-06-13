@@ -206,6 +206,25 @@ $(document).ready(function() {
     $(document).on('click', '.submit_product_form', function(e) {
         e.preventDefault();
 
+        console.log('[product] submit', {
+            product_id: $('#product_id').length ? $('#product_id').val() : null,
+            type: $('#type').val(),
+            sku: $('#sku_input').length ? $('#sku_input').val() : $('input[name="sku"]').val(),
+            combo_variation_ids: $('input[name="composition_variation_id[]"]').map(function() { return $(this).val(); }).get(),
+            combo_quantities: $('input[name="quantity[]"]').map(function() { return $(this).val(); }).get(),
+            combo_units: $('select[name="unit[]"]').map(function() { return $(this).val(); }).get()
+        });
+        if (typeof window.sendClientLog === 'function') {
+            window.sendClientLog('product submit', {
+                product_id: $('#product_id').length ? $('#product_id').val() : null,
+                type: $('#type').val(),
+                sku: $('#sku_input').length ? $('#sku_input').val() : $('input[name="sku"]').val(),
+                combo_variation_ids: $('input[name="composition_variation_id[]"]').map(function() { return $(this).val(); }).get(),
+                combo_quantities: $('input[name="quantity[]"]').map(function() { return $(this).val(); }).get(),
+                combo_units: $('select[name="unit[]"]').map(function() { return $(this).val(); }).get()
+            });
+        }
+
         var is_valid_product_form = true;
 
         var variation_skus = [];

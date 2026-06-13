@@ -9,7 +9,7 @@ class PDFGeneratorHelper
 {
     private $nodeServiceUrl;
     
-    public function __construct($nodeServiceUrl = 'http://localhost:3000')
+    public function __construct($nodeServiceUrl = 'https://api-shop.rubyshop.co.th')
     {
         $this->nodeServiceUrl = $nodeServiceUrl;
     }

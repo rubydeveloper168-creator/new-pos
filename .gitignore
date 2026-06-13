@@ -91,3 +91,10 @@ __MACOSX
 *.cache
 .phpunit.result.cache
 .php-cs-fixer.cache
+# --- deploy-managed exclusions (snapshot 2026-06-13) ---
+*.bak
+*.bak-*
+.env.bak*
+/app.zip
+/UltimatePOS-V6.1
+/add.js

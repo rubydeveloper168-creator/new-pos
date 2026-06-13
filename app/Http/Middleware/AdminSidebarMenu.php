@@ -36,6 +36,13 @@ class AdminSidebarMenu
             <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
             <path d="M10 12h4v4h-4z" />
           </svg>', 'active' => request()->segment(1) == 'home'])->order(5);
+            $menu->url(action([\App\Http\Controllers\HomeController::class, 'dashboardV2']), 'Dashboard V2', ['icon' => '<svg xmlns="http://www.w3.org/2000/svg" class="tw-size-5 tw-shrink-0" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+            <path d="M4 4h6v8h-6z" />
+            <path d="M14 4h6v4h-6z" />
+            <path d="M14 10h6v10h-6z" />
+            <path d="M4 14h6v6h-6z" />
+          </svg>', 'active' => request()->segment(1) == 'dashboard-v2'])->order(6);
 
             //User management dropdown
             if (auth()->user()->can('user.view') || auth()->user()->can('user.create') || auth()->user()->can('roles.view')) {
@@ -138,21 +145,11 @@ class AdminSidebarMenu
                     function ($sub) {
                         if (auth()->user()->can('product.view')) {
                             $sub->url(
-                                action([\App\Http\Controllers\ProductController::class, 'index']),
-                                __('lang_v1.list_products'),
-                                ['icon' => '', 'active' => request()->segment(1) == 'products' && request()->segment(2) == '']
-                            );
-                        }
-
-                        /*
-                        if (auth()->user()->can('product.view')) {
-                            $sub->url(
                                 action([\App\Http\Controllers\ProductV2Controller::class, 'index']),
                                 'Products V2 (Multi-Level Categories)',
                                 ['icon' => '', 'active' => request()->segment(1) == 'products-v2']
                             );
                         }
-                        */
 
                         if (auth()->user()->can('product.create')) {
                             $sub->url(
@@ -244,10 +241,22 @@ class AdminSidebarMenu
                             );
                         }
 
+                        // Group Types
+                        $sub->url(
+                            action([\App\Http\Controllers\GroupTypeController::class, 'index']),
+                            __('group_type.group_types'),
+                            ['icon' => '', 'active' => request()->segment(1) == 'group-types']
+                        );
+
                         $sub->url(
                             action([\App\Http\Controllers\WarrantyController::class, 'index']),
                             __('lang_v1.warranties'),
                             ['icon' => '', 'active' => request()->segment(1) == 'warranties']
+                        );
+                        $sub->url(
+                            action([\App\Http\Controllers\WarrantyCheckController::class, 'index']),
+                            'Warranty Check',
+                            ['icon' => '', 'active' => request()->segment(1) == 'warranty-check']
                         );
                     },
                     ['icon' => '<svg aria-hidden="true" class="tw-size-5 tw-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -334,7 +343,7 @@ class AdminSidebarMenu
                         if ($is_admin || auth()->user()->hasAnyPermission(['sell.view', 'sell.create', 'direct_sell.access', 'direct_sell.view', 'view_own_sell_only', 'view_commission_agent_sell'])) {
                             $sub->url(
                                 action([\App\Http\Controllers\SellController::class, 'summarySales']),
-                                'Summary Sales (สรุปยอดขาย)',
+                                'Sales ( รายการขาย)',
                                 ['icon' => '', 'active' => request()->segment(1) == 'sells' && request()->segment(2) == 'summary-sales']
                             );
                         }

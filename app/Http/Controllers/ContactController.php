@@ -765,6 +765,11 @@ class ContactController extends Controller
             //Added check because $users is of no use if enable_contact_assign if false
             $users = config('constants.enable_contact_assign') ? User::forDropdown($business_id, false, false, false, true) : [];
 
+            if (request()->boolean('compact')) {
+                return view('contact.edit_compact_customer')
+                    ->with(compact('contact', 'customer_groups', 'opening_balance'));
+            }
+
             return view('contact.edit')
                 ->with(compact('contact', 'types', 'customer_groups', 'opening_balance', 'users'));
         }

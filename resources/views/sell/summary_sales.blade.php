@@ -176,6 +176,8 @@
     }
     
     /* Amount columns */
+    #summary_sales_table th:nth-child(8),
+    #summary_sales_table td:nth-child(8),
     #summary_sales_table th:nth-child(9),
     #summary_sales_table td:nth-child(9),
     #summary_sales_table th:nth-child(10),
@@ -329,9 +331,11 @@
     }
     
     /* Enhanced modal styling */
-    .modal-xl {
-        max-width: 1200px !important;
-        width: 95% !important;
+    .view_modal .modal-dialog,
+    .view_modal .modal-dialog.modal-xl {
+        width: 98%;
+        max-width: 1400px;
+        margin: 80px auto;
     }
     
     .loading-spinner .spinner-border {
@@ -360,9 +364,88 @@
         transition: transform 0.3s ease-out;
         transform: translate(0, -50px);
     }
-    
+
     .modal.show .modal-dialog {
         transform: none;
+    }
+
+    /* Export Section Styles */
+    .export-section {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 15px 20px;
+        margin-bottom: 15px;
+    }
+    .export-section .section-title {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 12px;
+        font-size: 14px;
+    }
+    .export-section .export-date-range {
+        display: inline-block;
+        width: 280px;
+        margin-right: 15px;
+    }
+    .export-section .export-btn {
+        padding: 8px 20px;
+        font-weight: 500;
+        border-radius: 5px;
+        margin-right: 8px;
+    }
+    .export-section .btn-csv {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: #fff;
+    }
+    .export-section .btn-csv:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+    }
+    .export-section .btn-xlsx {
+        background-color: #17a2b8;
+        border-color: #17a2b8;
+        color: #fff;
+    }
+    .export-section .btn-xlsx:hover {
+        background-color: #138496;
+        border-color: #117a8b;
+    }
+    .export-section .fa-spin {
+        margin-right: 5px;
+    }
+    .export-section .export-filter-group {
+        margin-top: 10px;
+    }
+    .export-section .export-columns {
+        margin-top: 10px;
+        padding: 10px;
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+    }
+    .export-section .export-columns .checkbox-inline {
+        margin-right: 12px;
+        margin-bottom: 6px;
+    }
+    .export-toggle-btn {
+        padding: 6px 14px;
+        font-weight: 600;
+        border-radius: 5px;
+        margin-bottom: 8px;
+    }
+
+    @media print {
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        @page { margin: 10mm; }
+        body.modal-printing > *:not(#modal-print-container) { display: none !important; }
+        body.modal-printing #modal-print-container { display: block !important; }
+        body.modal-printing #modal-print-container .modal-header { display: none !important; }
+        body.modal-printing #modal-print-container .modal-footer { display: none !important; }
+        body.modal-printing #modal-print-container .no-print { display: none !important; }
+        body.modal-printing #modal-print-container .modal-dialog { margin: 0 !important; max-width: 100% !important; width: 100% !important; box-shadow: none !important; transform: none !important; }
+        body.modal-printing #modal-print-container .modal-content { box-shadow: none !important; border: none !important; border-radius: 0 !important; }
     }
 </style>
 @endsection
@@ -554,8 +637,88 @@
                         <div class="checkbox-inline">
                             <label>
                                 <input type="checkbox" id="filter_billing_receive" class="document-filter-checkbox" data-filter="billing_receive" checked>
-                                <span class="label bg-green" style="font-size: 13px; padding: 4px 8px;">Billing-Receive (IPAY)</span>
+                                <span class="label bg-green" style="font-size: 13px; padding: 4px 8px;">Payment Received</span>
                             </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Section -->
+            <div class="row">
+                <div class="col-md-12">
+                    <button type="button" id="btn_toggle_export" class="btn btn-default export-toggle-btn">
+                        <i class="fa fa-chevron-down"></i> Show Export
+                    </button>
+                    <div class="export-section" id="export_section" style="display: none;">
+                        <div class="section-title">
+                            <i class="fa fa-download"></i> Export Data
+                        </div>
+                        <div class="form-inline">
+                            <div class="form-group export-date-range">
+                                <label for="export_date_range" style="margin-right: 10px;">Date Range:</label>
+                                <input type="text" id="export_date_range" class="form-control" placeholder="Select date range" readonly style="width: 200px;">
+                            </div>
+                            <button type="button" id="btn_export_csv" class="btn export-btn btn-csv">
+                                <i class="fa fa-file-csv"></i> Export CSV
+                            </button>
+                            <button type="button" id="btn_export_xlsx" class="btn export-btn btn-xlsx">
+                                <i class="fa fa-file-excel"></i> Export XLSX
+                            </button>
+                        </div>
+                        <div class="export-filter-group">
+                            <label style="margin-right: 10px; font-weight: 600;">Document Type (Export):</label>
+                            <div class="checkbox-inline">
+                                <label>
+                                    <input type="checkbox" id="export_filter_tax_invoice" checked>
+                                    <span class="label bg-red" style="font-size: 12px; padding: 3px 6px;">Tax-Invoice (VT)</span>
+                                </label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label>
+                                    <input type="checkbox" id="export_filter_billing_receive" checked>
+                                    <span class="label bg-green" style="font-size: 12px; padding: 3px 6px;">Payment Received</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="export-columns">
+                            <div style="font-weight: 600; margin-bottom: 6px;">Columns (Export):</div>
+                            <div class="checkbox-inline">
+                                <label>
+                                    <input type="checkbox" id="export_columns_all" checked>
+                                    <strong>Select All</strong>
+                                </label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="date" checked> Date</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="invoice_no" checked> Invoice No</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="document_type" checked> Document Type</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="customer" checked> Customer</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="location" checked> Location</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="payment_status" checked> Payment Status</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="total_amount" checked> Total Amount</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="total_paid" checked> Total Paid</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="total_remaining" checked> Total Remaining</label>
+                            </div>
+                            <div class="checkbox-inline">
+                                <label><input type="checkbox" class="export-column" value="tax" checked> Tax</label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -581,7 +744,7 @@
                     <!-- Loading overlay -->
                     <div class="table-loading-overlay" id="table-loading-overlay">
                         <div class="loading-spinner"></div>
-                        <div style="color: #666; font-weight: bold;">Loading new billing receipt...</div>
+                        <div style="color: #666; font-weight: bold;">Loading records...</div>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped ajax_view" id="summary_sales_table">
@@ -595,9 +758,9 @@
                             <th>@lang('sale.location')</th>
                             <th>@lang('sale.payment_status')</th>
                             <th>@lang('sale.total_amount')</th>
+                            <th>@lang('sale.tax')</th>
                             <th>@lang('sale.total_paid')</th>
                             <th>@lang('lang_v1.sell_due')</th>
-                            <th>@lang('lang_v1.shipping_status')</th>
                             <th>@lang('lang_v1.total_items')</th>
                             <th>@lang('lang_v1.added_by')</th>
                             <th>@lang('sale.sell_note')</th>
@@ -609,9 +772,9 @@
                         <tr class="bg-gray font-17 footer-total text-center">
                             <td colspan="5"><strong>@lang('sale.total'):</strong></td>
                             <td class="footer_payment_status_count"></td>
-                            <td class="footer_sale_total"></td>
-                            <td class="footer_total_paid"></td>
-                            <td class="footer_total_remaining"></td>
+                            <td class="footer_sale_total display_currency" data-currency_symbol="true"></td>
+                            <td class="footer_total_paid display_currency" data-currency_symbol="true"></td>
+                            <td class="footer_total_remaining display_currency" data-currency_symbol="true"></td>
                             <td colspan="6"></td>
                         </tr>
                     </tfoot>
@@ -625,73 +788,6 @@
 
     <!-- View/Add/Edit Payment Modal -->
     <div class="modal fade payment_modal" tabindex="-1" role="dialog" aria-labelledby="paymentModalLabel" style="display: none;">
-    </div>
-
-    <!-- Create Billing-Receipt Options Modal -->
-    <div class="modal fade" id="createBillingReceiptModal" tabindex="-1" role="dialog" aria-labelledby="createBillingReceiptModalLabel">
-        <div class="modal-dialog" style="width: 950px; margin: 50px auto; display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 100px);">
-            <div class="modal-content" style="border-radius: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); border: none; width: 100%;">
-                <div class="modal-header" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border-radius: 12px 12px 0 0; padding: 25px; border-bottom: none;">
-                    <h4 class="modal-title" style="font-size: 22px; font-weight: 600; margin: 0; display: flex; align-items: center;">
-                        <i class="fa fa-receipt" style="margin-right: 10px; font-size: 24px;"></i>
-                        Create Billing-Receipt
-                    </h4>
-                    <button type="button" class="close" data-dismiss="modal" style="color: white; opacity: 0.9; font-size: 28px; background: none; border: none;">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body" style="padding: 40px; background-color: #f8f9fa;">
-                    <div style="background: white; padding: 35px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                        <div style="text-align: center; margin-bottom: 35px;">
-                            <i class="fa fa-question-circle" style="font-size: 48px; color: #4CAF50; margin-bottom: 15px;"></i>
-                            <h5 style="color: #333; font-weight: 600; margin-bottom: 10px;">Choose Creation Option</h5>
-                            <p style="color: #666; margin: 0;">How would you like to create the Billing-Receipt?</p>
-                        </div>
-                        
-                        <!-- Horizontal Layout for Options -->
-                        <div class="row" style="margin: 0 -15px;">
-                           
-                             
-                        <div class="col-md-6" style="padding: 0 15px;">
-                                <div class="option-card" style="border: 2px solid #e9ecef; border-radius: 8px; padding: 30px 20px; cursor: pointer; transition: all 0.3s ease; height: 160px; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden;" data-option="with-payment">
-                                    <div style="width: 100%;">
-                                        <div style="background: #2196F3; color: white; border-radius: 50%; width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;">
-                                            <i class="fa fa-credit-card" style="font-size: 22px;"></i>
-                                        </div>
-                                        <h6 style="margin: 0 0 10px 0; font-weight: 600; color: #333; font-size: 17px; line-height: 1.3; word-wrap: break-word;">Create + Add Payment</h6>
-                                        <small style="color: #666; font-size: 14px; line-height: 1.4; display: block; word-wrap: break-word;">Create and add payment info</small>
-                                    </div>
-                                </div>
-                            </div>
-                       
-                        
-                        <div class="col-md-6" style="padding: 0 15px;">
-                                <div class="option-card" style="border: 2px solid #e9ecef; border-radius: 8px; padding: 30px 20px; cursor: pointer; transition: all 0.3s ease; height: 160px; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden;" data-option="only">
-                                    <div style="width: 100%;">
-                                        <div style="background: #4CAF50; color: white; border-radius: 50%; width: 55px; height: 55px; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;">
-                                            <i class="fa fa-file-alt" style="font-size: 22px;"></i>
-                                        </div>
-                                        <h6 style="margin: 0 0 10px 0; font-weight: 600; color: #333; font-size: 17px; line-height: 1.3; word-wrap: break-word;">Create Billing-Receipt Only</h6>
-                                        <small style="color: #666; font-size: 14px; line-height: 1.4; display: block; word-wrap: break-word;">Create without adding payment</small>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                         
-                    
-                       
-                       
-                       
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer" style="background-color: #f8f9fa; border-top: 1px solid #e9ecef; border-radius: 0 0 12px 12px; padding: 25px; display: flex; justify-content: center;">
-                    <button type="button" class="btn btn-danger" data-dismiss="modal" style="padding: 12px 35px; border-radius: 6px; font-size: 16px; background-color: #000; border-color: #dc3545; font-weight: 500;">
-                    ❌ Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- This will be printed -->
@@ -765,12 +861,29 @@
                     }
                     // Basic currency formatting - you may need to adjust this based on your currency settings
                     if (typeof __currency_trans_from_en === 'function') {
-                        $(this).text(__currency_trans_from_en(value, show_symbol, use_page_currency, 2, is_quantity));
+                        // Strip non-numeric characters (except . and -) before parsing
+                        var cleanValue = value.replace(/[^\d.-]/g, '');
+                        var valNum = parseFloat(cleanValue);
+                        var processValue = cleanValue;
+                        if (!isNaN(valNum)) {
+                            processValue = Math.abs(valNum).toString();
+                        }
+                        
+                        var formatted = __currency_trans_from_en(processValue, show_symbol, use_page_currency, 2, is_quantity);
+                        
+                        // Remove any remaining negative signs or parentheses just in case
+                        formatted = formatted.replace('-', '').replace('(', '').replace(')', '');
+                        
+                        if (show_symbol && formatted.indexOf('฿') !== -1) {
+                            formatted = formatted.replace('฿', '').trim() + ' ฿';
+                        }
+                        $(this).text(formatted);
                     } else {
                         // Fallback formatting
-                        var num = parseFloat(value);
+                        var cleanValue = value.replace(/[^\d.-]/g, '');
+                        var num = Math.abs(parseFloat(cleanValue));
                         if (!isNaN(num)) {
-                            $(this).text(num.toFixed(2));
+                            $(this).text(num.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,') + ' ฿');
                         }
                     }
                 });
@@ -866,7 +979,7 @@
                         });
 
                         // Update monthly card
-                        $('#monthly-sales-total').html('฿' + monthlyTotal);
+                        $('#monthly-sales-total').html(monthlyTotal + ' ฿');
                         $('#monthly-sales-label').text('ยอดขายเดือน ' + data.monthly.month_name + ' ' + data.monthly.year);
                         $('#monthly-sales-count').text(data.monthly.count + ' รายการ');
 
@@ -882,7 +995,7 @@
                         $('#monthly-sales-change').html(monthlyChangeHtml);
 
                         // Update yearly card
-                        $('#yearly-sales-total').html('฿' + yearlyTotal);
+                        $('#yearly-sales-total').html(yearlyTotal + ' ฿');
                         $('#yearly-sales-label').text('ยอดขายปี ' + data.yearly.year);
                         $('#yearly-sales-count').text(data.yearly.count + ' รายการ');
 
@@ -940,10 +1053,151 @@
                 summary_sales_table.ajax.reload();
             });
 
+            // Frontend debug helper: log the latest 5 visible bills and VT<->IPAY linkage.
+            // Disable by setting this flag to false.
+            const ENABLE_SUMMARY_RELATION_DEBUG = true;
+
+            function extractTransactionIdFromHref(href) {
+                if (!href) {
+                    return null;
+                }
+                const match = href.match(/\/sells\/(\d+)(?:\D|$)/);
+                return match ? parseInt(match[1], 10) : null;
+            }
+
+            function normalizeInvoiceText(text) {
+                return (text || '').replace(/\s+/g, ' ').trim();
+            }
+
+            function debugLastFiveBillsRelations() {
+                if (!ENABLE_SUMMARY_RELATION_DEBUG) {
+                    return;
+                }
+
+                const $rows = $('#summary_sales_table tbody tr').filter(function() {
+                    return $(this).find('td').length > 1;
+                }).slice(0, 5);
+
+                if ($rows.length === 0) {
+                    console.log('[SummarySales Debug] No rows available for relation check.');
+                    return;
+                }
+
+                const entries = [];
+                $rows.each(function(index) {
+                    const $row = $(this);
+                    const href = $row.attr('data-href') || '';
+                    const transactionId = extractTransactionIdFromHref(href);
+                    const invoiceNo = normalizeInvoiceText($row.find('td').eq(1).text());
+                    const type = invoiceNo.startsWith('VT') ? 'VT'
+                        : (invoiceNo.startsWith('IPAY') ? 'IPAY' : 'OTHER');
+
+                    entries.push({
+                        position: index + 1,
+                        transaction_id: transactionId,
+                        invoice_no: invoiceNo,
+                        type: type
+                    });
+                });
+
+                console.groupCollapsed('[SummarySales Debug] Last 5 bills on current page');
+                console.table(entries);
+                console.groupEnd();
+
+                entries.forEach(function(entry) {
+                    if (!entry.transaction_id) {
+                        console.warn('[SummarySales Debug] Missing transaction_id from row href:', entry);
+                        return;
+                    }
+
+                    if (entry.type === 'VT') {
+                        $.ajax({
+                            url: '{{ url("/api/get-related-ipay") }}/' + entry.transaction_id,
+                            method: 'GET'
+                        }).done(function(response) {
+                            if (response && response.success && response.ipay) {
+                                var source = response.ipay.source || 'unknown';
+                                var syntheticLabel = response.ipay.synthetic ? 'synthetic' : 'real';
+                                console.log(
+                                    '[SummarySales Debug] VT -> IPAY',
+                                    entry.invoice_no,
+                                    '=>',
+                                    response.ipay.invoice_no,
+                                    '[' + syntheticLabel + ', source=' + source + ']',
+                                    '(VT ID:',
+                                    entry.transaction_id + ', IPAY ID:',
+                                    response.ipay.id + ')'
+                                );
+                            } else {
+                                console.warn(
+                                    '[SummarySales Debug] VT has no related IPAY',
+                                    entry.invoice_no,
+                                    '(VT ID:',
+                                    entry.transaction_id + ')',
+                                    response
+                                );
+                            }
+                        }).fail(function(xhr) {
+                            console.error(
+                                '[SummarySales Debug] Failed VT->IPAY lookup',
+                                entry.invoice_no,
+                                '(VT ID:',
+                                entry.transaction_id + ')',
+                                xhr.status,
+                                xhr.responseText
+                            );
+                        });
+                    } else if (entry.type === 'IPAY') {
+                        $.ajax({
+                            url: '{{ url("/api/get-related-vt") }}/' + entry.transaction_id,
+                            method: 'GET'
+                        }).done(function(response) {
+                            if (response && response.success && response.vt) {
+                                console.log(
+                                    '[SummarySales Debug] IPAY -> VT',
+                                    entry.invoice_no,
+                                    '=>',
+                                    response.vt.invoice_no,
+                                    '(IPAY ID:',
+                                    entry.transaction_id + ', VT ID:',
+                                    response.vt.id + ')'
+                                );
+                            } else {
+                                console.warn(
+                                    '[SummarySales Debug] IPAY has no related VT',
+                                    entry.invoice_no,
+                                    '(IPAY ID:',
+                                    entry.transaction_id + ')',
+                                    response
+                                );
+                            }
+                        }).fail(function(xhr) {
+                            console.error(
+                                '[SummarySales Debug] Failed IPAY->VT lookup',
+                                entry.invoice_no,
+                                '(IPAY ID:',
+                                entry.transaction_id + ')',
+                                xhr.status,
+                                xhr.responseText
+                            );
+                        });
+                    } else {
+                        console.log(
+                            '[SummarySales Debug] Non VT/IPAY row skipped:',
+                            entry.invoice_no,
+                            '(ID:',
+                            entry.transaction_id + ')'
+                        );
+                    }
+                });
+            }
+
             summary_sales_table = $('#summary_sales_table').DataTable({
                 processing: false,
                 serverSide: true,
-                aaSorting: [[1, 'desc']],
+                fixedHeader: false,
+                // Default to latest transaction time to avoid mixed invoice-number ordering.
+                aaSorting: [[0, 'desc']],
                 "ajax": {
                     "url": "{{ route('sells.summary-sales-data') }}",
                     "data": function(d) {
@@ -997,9 +1251,9 @@
                     { data: 'business_location', name: 'bl.name' },
                     { data: 'payment_status', name: 'transactions.payment_status' },
                     { data: 'final_total', name: 'transactions.final_total' },
+                    { data: 'tax_amount', name: 'transactions.tax_amount', searchable: false },
                     { data: 'total_paid', name: 'total_paid', searchable: false },
                     { data: 'total_remaining', name: 'total_remaining', searchable: false },
-                    { data: 'shipping_status', name: 'transactions.shipping_status' },
                     { data: 'total_items', name: 'total_items', searchable: false },
                     { data: 'added_by', name: 'u.first_name' },
                     { data: 'additional_notes', name: 'transactions.additional_notes' },
@@ -1028,28 +1282,7 @@
                     $('.footer_payment_status_count').html(payment_status_html);
 
                     __currency_convert_recursively($('#summary_sales_table'));
-                    
-                    // Highlight newly created billing receipt if exists in localStorage
-                    const billingReceiptId = getNewBillingReceiptId();
-                    if (billingReceiptId) {
-                        var targetRow = $('#summary_sales_table tbody tr').filter(function() {
-                            return $(this).data('href') && $(this).data('href').includes('/' + billingReceiptId);
-                        });
-                        
-                        if (targetRow.length > 0) {
-                            targetRow.addClass('highlight-new-record');
-                            
-                            // Scroll to the highlighted row
-                            $('html, body').animate({
-                                scrollTop: targetRow.offset().top - 100
-                            }, 1000);
-                            
-                            // Remove highlight after 10 seconds (but keep in localStorage for 1 minute)
-                            setTimeout(function() {
-                                targetRow.removeClass('highlight-new-record');
-                            }, 10000);
-                        }
-                    }
+                    debugLastFiveBillsRelations();
                     
                     // Highlight newly created tax invoice if exists in localStorage
                     const taxInvoiceId = getNewTaxInvoiceId();
@@ -1154,15 +1387,12 @@
                 console.log('View payment clicked!', this); // Debug log
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 var href = $(this).data('href');
                 console.log('View payment href:', href); // Debug log
                 if (href) {
-                    // Clear any existing modals
-                    $('.payment_modal').modal('hide').html('');
-                    
                     console.log('Loading view payment from:', href); // Debug log
-                    
+
                     // Load view payments modal
                     $.ajax({
                         method: 'GET',
@@ -1170,7 +1400,8 @@
                         dataType: 'html',
                         success: function(result) {
                             console.log('View payment loaded successfully'); // Debug log
-                            $('.payment_modal').html(result).modal('show');
+                            $('.payment_modal').html(result);
+                            $('.payment_modal').modal('show');
                         },
                         error: function(xhr, status, error) {
                             console.error('Payment details load error:', error, xhr.responseText); // Enhanced debug
@@ -1179,61 +1410,6 @@
                     });
                 } else {
                     console.log('No href found for view-payment'); // Debug log
-                }
-            });
-
-            // Handle regular add payment modal - ensure it works properly with JSON response
-            $(document).on('click', '.add_payment_modal', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                var rawPaymentUrl = $(this).attr('href');
-                var paymentUrl = rawPaymentUrl ? buildAppUrl(rawPaymentUrl) : null;
-                console.log('Add payment clicked:', paymentUrl); // Debug log
-                
-                if (paymentUrl) {
-                    // Clear any existing modals
-                    $('.payment_modal').modal('hide').html('');
-                    
-                    // Load payment modal using JSON response (same as payment.js)
-                    $.ajax({
-                        url: paymentUrl,
-                        dataType: 'json',
-                        success: function(result) {
-                            console.log('Add payment response:', result);
-                            if (result.status == 'due') {
-                                $('.payment_modal').html(result.view).modal('show');
-                                
-                                // Ensure this is NOT in billing receipt mode
-                                $('.payment_modal').removeAttr('data-billing-receipt-mode');
-                                
-                                __currency_convert_recursively($('.payment_modal'));
-                                $('#paid_on').datetimepicker({
-                                    format: moment_date_format + ' ' + moment_time_format,
-                                    ignoreReadonly: true,
-                                });
-                                $('.payment_modal').find('form#transaction_payment_add_form').validate();
-                                set_default_payment_account();
-
-                                $('.payment_modal')
-                                    .find('input[type="checkbox"].input-icheck')
-                                    .each(function() {
-                                        $(this).iCheck({
-                                            checkboxClass: 'icheckbox_square-blue',
-                                            radioClass: 'iradio_square-blue',
-                                        });
-                                    });
-                            } else {
-                                toastr.error(result.msg);
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            console.error('Add payment failed:', xhr, status, error);
-                            toastr.error('Failed to load payment modal');
-                        }
-                    });
-                } else {
-                    console.log('No href found for add_payment_modal'); // Debug log
                 }
             });
 
@@ -1260,7 +1436,7 @@
                 }
             });
 
-            // Print invoice functionality - original method http://localhost:3000/health
+            // Print invoice functionality - original method https://api-shop.rubyshop.co.th/health
             $(document).on('click', '.print-invoice', function(e) {
                 e.preventDefault();
                 var href = $(this).data('href');
@@ -1433,32 +1609,6 @@
                 });
             });
 
-            // Handle modal Create Billing-Receive button click
-            $(document).on('click', '.modal-create-billing-btn', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                var transactionId = $(this).data('transaction-id');
-                
-                console.log('Modal Create Billing-Receive button clicked:', transactionId);
-                
-                if (!transactionId) {
-                    toastr.error('Transaction ID not found');
-                    return;
-                }
-                
-                // Close the transaction details modal first
-                $('.view_modal').modal('hide');
-                
-                // Store proforma ID for later use
-                window.pendingBillingReceiptProformaId = transactionId;
-                
-                // Show the Create Billing-Receipt options modal
-                setTimeout(function() {
-                    $('#createBillingReceiptModal').modal('show');
-                }, 300); // Small delay for smooth modal transition
-            });
-
             // Initialize default document filter
             window.currentDocumentFilter = 'both';
             
@@ -1471,35 +1621,6 @@
                 $('#table-loading-overlay').css('display', 'none');
             }
             
-            // Functions to manage billing receipt highlighting with localStorage
-            function storeNewBillingReceiptId(id) {
-                const data = {
-                    id: id,
-                    timestamp: Date.now()
-                };
-                localStorage.setItem('newBillingReceiptHighlight', JSON.stringify(data));
-            }
-            
-            function getNewBillingReceiptId() {
-                const stored = localStorage.getItem('newBillingReceiptHighlight');
-                if (!stored) return null;
-                
-                const data = JSON.parse(stored);
-                const oneMinute = 60 * 1000; // 1 minute in milliseconds
-                
-                // Check if more than 1 minute has passed
-                if (Date.now() - data.timestamp > oneMinute) {
-                    localStorage.removeItem('newBillingReceiptHighlight');
-                    return null;
-                }
-                
-                return data.id;
-            }
-            
-            function clearNewBillingReceiptId() {
-                localStorage.removeItem('newBillingReceiptHighlight');
-            }
-
             // Functions to manage tax invoice highlighting with localStorage
             function storeNewTaxInvoiceId(id) {
                 const data = {
@@ -1529,487 +1650,7 @@
                 localStorage.removeItem('newTaxInvoiceHighlight');
             }
 
-            // Create Billing-Receipt functionality
-            $(document).on('click', '.create-billing-receipt', function(e) {
-                e.preventDefault();
-                
-                var proformaId = $(this).data('id');
-                
-                if (!proformaId) {
-                    toastr.error('Proforma ID not found');
-                    return;
-                }
-                
-                console.log('Create billing receipt clicked for proforma ID:', proformaId);
-                
-                // Store proforma ID for later use
-                window.pendingBillingReceiptProformaId = proformaId;
-                
-                // Show styled modal instead of confirm dialog
-                $('#createBillingReceiptModal').modal('show');
-            });
-
-            // Handle option card clicks in the modal
-            $(document).on('click', '.option-card', function() {
-                // Remove active state from all cards
-                $('.option-card').css({
-                    'border-color': '#e9ecef',
-                    'background-color': 'white',
-                    'transform': 'none'
-                });
-                
-                // Add active state to clicked card
-                $(this).css({
-                    'border-color': '#4CAF50',
-                    'background-color': '#f8fff8',
-                    'transform': 'translateY(-2px)'
-                });
-                
-                var option = $(this).data('option');
-                var proformaId = window.pendingBillingReceiptProformaId;
-                
-                // Close modal
-                $('#createBillingReceiptModal').modal('hide');
-                
-                // Execute the chosen option
-                setTimeout(function() {
-                    if (option === 'only') {
-                        // User chose to create billing receipt only
-                        createBillingReceiptOnly(proformaId);
-                    } else if (option === 'with-payment') {
-                        // User chose to create billing receipt + add payment
-                        console.log('User chose to create billing receipt with payment - opening payment modal directly');
-                        openPaymentModalForBillingReceipt(proformaId);
-                    }
-                }, 300); // Small delay for smooth modal transition
-            });
-
-            // Add hover effects for option cards
-            $(document).on('mouseenter', '.option-card', function() {
-                if ($(this).css('border-color') !== 'rgb(76, 175, 80)') { // Not selected
-                    $(this).css({
-                        'border-color': '#ddd',
-                        'transform': 'translateY(-1px)'
-                    });
-                }
-            });
-
-            $(document).on('mouseleave', '.option-card', function() {
-                if ($(this).css('border-color') !== 'rgb(76, 175, 80)') { // Not selected
-                    $(this).css({
-                        'border-color': '#e9ecef',
-                        'transform': 'none'
-                    });
-                }
-            });
-            
-            // Function to create billing receipt only (without payment modal)
-            function createBillingReceiptOnly(proformaId) {
-                console.log('Creating billing receipt only for proforma ID:', proformaId);
-                
-                $.ajax({
-                    method: 'POST',
-                    url: '{{ route("sells.create-billing-receive", ":id") }}'.replace(':id', proformaId),
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        with_payment: false
-                    },
-                    success: function(response) {
-                        console.log('Billing receipt only creation response:', response);
-                        
-                        if (response.success) {
-                            toastr.success(response.msg);
-                            
-                            // Store the new billing receipt ID for highlighting
-                            if (response.billing_receipt_id) {
-                                storeNewBillingReceiptId(response.billing_receipt_id);
-                            }
-                            
-                            // Show loading overlay before reloading table
-                            showTableLoading();
-                            summary_sales_table.ajax.reload();
-                            
-                            // Show success info
-                            setTimeout(function() {
-                                toastr.info('Billing-Receipt created successfully. You can add payments later if needed.', 'Success');
-                            }, 1000);
-                        } else {
-                            console.error('Failed to create billing receipt:', response);
-                            toastr.error(response.msg || 'Failed to create Billing-Receipt');
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Billing receipt only creation failed:', xhr, status, error);
-                        console.error('Response text:', xhr.responseText);
-                        console.error('Status:', xhr.status);
-                        toastr.error('Failed to create Billing-Receipt: ' + xhr.status + ' - ' + error);
-                    }
-                });
-            }
-            
-            // Function to open payment modal for billing receipt creation
-            function openPaymentModalForBillingReceipt(proformaId) {
-                console.log('Opening payment modal for billing receipt creation, proforma ID:', proformaId);
-                
-                // Show loading in payment modal
-                var loadingHtml = `
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h4 class="modal-title">Add Payment for Billing-Receipt</h4>
-                                <button type="button" class="close" data-dismiss="modal">&times;</button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="text-center">
-                                    <i class="fa fa-spinner fa-spin fa-3x"></i>
-                                    <p>Loading payment form...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                $('.payment_modal').html(loadingHtml).modal({
-                    backdrop: 'static',
-                    keyboard: false
-                });
-                
-                // Load the payment form using the correct endpoint that returns JSON
-                $.ajax({
-                    method: 'GET',
-                    url: buildAppUrl('/payments/add_payment/' + proformaId),
-                    dataType: 'json', // This is the key fix - expect JSON response
-                    cache: false,
-                    beforeSend: function() {
-                        console.log('Loading payment form for proforma ID:', proformaId);
-                    },
-                    success: function(result) {
-                        console.log('Payment form loaded successfully:', result);
-                        
-                        if (result.status == 'due' && result.view) {
-                            // Payment form loaded successfully
-                            console.log('Rendering payment form in modal...');
-                            
-                            // Clear the modal and add the view content
-                            $('.payment_modal').html(result.view);
-                            
-                            // Initialize the modal properly
-                            $('.payment_modal').modal('show');
-                            
-                            // Initialize currency conversion and form validation
-                            __currency_convert_recursively($('.payment_modal'));
-                            
-                            // Initialize datetime picker
-                            $('#paid_on').datetimepicker({
-                                format: moment_date_format + ' ' + moment_time_format,
-                                ignoreReadonly: true,
-                            });
-                            
-                            // Initialize form validation
-                            $('.payment_modal').find('form#transaction_payment_add_form').validate();
-                            
-                            // Set default payment account
-                            set_default_payment_account();
-                            
-                            // Initialize iCheck for checkboxes
-                            $('.payment_modal')
-                                .find('input[type="checkbox"].input-icheck')
-                                .each(function() {
-                                    $(this).iCheck({
-                                        checkboxClass: 'icheckbox_square-blue',
-                                        radioClass: 'iradio_square-blue',
-                                    });
-                                });
-                            
-                            // Modify the modal title to indicate this is for billing receipt
-                            $('.payment_modal .modal-title').text('Add Payment for Billing-Receipt Creation');
-                            
-                            // Add a note about what will happen
-                            var noteHtml = `
-                                <div class="alert alert-info" style="margin-bottom: 15px;">
-                                    <i class="fa fa-info-circle"></i> 
-                                    <strong>Note:</strong> After saving this payment, the Billing-Receipt will be created with this payment information.
-                                </div>
-                            `;
-                            $('.payment_modal .modal-body').prepend(noteHtml);
-                            
-                            // Set up custom form submission handler
-                            setupBillingReceiptPaymentModal();
-                            
-                        } else if (result.status == 'paid') {
-                            // Transaction is already paid
-                            toastr.error(result.msg || 'This transaction is already fully paid');
-                            $('.payment_modal').modal('hide');
-                        } else {
-                            // Unexpected response
-                            console.error('Unexpected payment form response:', result);
-                            var errorHtml = `
-                                <div class="modal-dialog modal-lg">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h4 class="modal-title">Error Loading Payment Form</h4>
-                                            <button type="button" class="close" data-dismiss="modal">&times;</button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <div class="alert alert-danger">
-                                                <i class="fa fa-exclamation-triangle"></i>
-                                                <strong>Error:</strong> Payment form could not be loaded properly. 
-                                                The server returned an unexpected response.
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                            $('.payment_modal').html(errorHtml);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Failed to load payment form:', xhr, status, error);
-                        console.error('Status:', xhr.status);
-                        console.error('Response text:', xhr.responseText);
-                        
-                        var errorHtml = `
-                            <div class="modal-dialog modal-lg">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h4 class="modal-title">Payment Form Load Error</h4>
-                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <div class="alert alert-warning">
-                                            <i class="fa fa-exclamation-triangle"></i>
-                                            <strong>Unable to load payment form.</strong>
-                                            <br><br>
-                                            <strong>What you can do:</strong>
-                                            <ul>
-                                                <li>Close this modal and try creating the billing receipt without payment first</li>
-                                                <li>Then add payments later using the "Add Payment" button in the table</li>
-                                                <li>Or refresh the page and try again</li>
-                                            </ul>
-                                        </div>
-                                        <div class="alert alert-info">
-                                            <strong>Error Details:</strong> ${xhr.status} - ${error}
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                        $('.payment_modal').html(errorHtml);
-                    }
-                });
-            }
-            
-            // Setup custom handling for billing receipt payment modal
-            function setupBillingReceiptPaymentModal() {
-                console.log('Setting up billing receipt payment modal handlers');
-                
-                // Mark this modal as being for billing receipt creation
-                $('.payment_modal').attr('data-billing-receipt-mode', 'true');
-                
-                // Override the form submission for billing receipt creation
-                $('.payment_modal form').off('submit.billing-receipt').on('submit.billing-receipt', function(e) {
-                    e.preventDefault();
-                    console.log('Payment form submitted for billing receipt creation');
-                    
-                    var form = $(this);
-                    var formData = new FormData(form[0]);
-                    
-                    // Debug: log form data
-                    for (var pair of formData.entries()) {
-                        console.log('Form data:', pair[0] + ' = ' + pair[1]);
-                    }
-                    
-                    // Show loading state
-                    var submitButton = form.find('button[type="submit"]');
-                    var originalText = submitButton.text();
-                    submitButton.prop('disabled', true).text('Processing...');
-                    
-                    // First save the payment - use the correct payments store endpoint
-                    var formAction = form.attr('action');
-                    console.log('Original form action:', formAction);
-                    
-                    // Always use the correct payments store URL
-                    formAction = '/payments';
-                    console.log('Using payments store URL:', formAction);
-                    
-                    $.ajax({
-                        method: 'POST',
-                        url: formAction,
-                        data: formData,
-                        processData: false,
-                        contentType: false,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                        },
-                        success: function(paymentResponse) {
-                            console.log('Payment saved successfully:', paymentResponse);
-                            
-                            if (paymentResponse.success) {
-                                toastr.success(paymentResponse.msg || 'Payment saved successfully');
-                                
-                                // Close payment modal
-                                $('.payment_modal').modal('hide');
-                                
-                                // Now create the billing receipt with the payment information
-                                console.log('Creating billing receipt with payment ID:', paymentResponse.payment_id);
-                                createBillingReceiptWithPayment(window.pendingBillingReceiptProformaId, paymentResponse);
-                            } else {
-                                // Reset submit button
-                                submitButton.prop('disabled', false).text(originalText);
-                                console.error('Payment save failed:', paymentResponse);
-                                toastr.error(paymentResponse.msg || 'Failed to save payment');
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            console.error('Payment save failed:', xhr, status, error);
-                            console.error('Response text preview:', xhr.responseText ? xhr.responseText.substring(0, 200) : 'No response text');
-                            
-                            // Reset submit button
-                            submitButton.prop('disabled', false).text(originalText);
-                            
-                            var errorMessage = 'Failed to save payment';
-                            
-                            // Check if response is HTML (redirect page) instead of JSON
-                            if (xhr.responseText && xhr.responseText.includes('<!DOCTYPE html>')) {
-                                errorMessage = 'Payment form submission returned a page redirect instead of JSON response. This might be a server configuration issue.';
-                                console.error('Received HTML response instead of JSON - this indicates the AJAX request was not properly handled');
-                            } else if (xhr.responseJSON && xhr.responseJSON.msg) {
-                                errorMessage = xhr.responseJSON.msg;
-                            } else if (xhr.responseText) {
-                                try {
-                                    var errorResponse = JSON.parse(xhr.responseText);
-                                    errorMessage = errorResponse.msg || errorResponse.message || errorMessage;
-                                } catch (e) {
-                                    errorMessage = 'Error: ' + xhr.status + ' - ' + error;
-                                }
-                            }
-                            toastr.error(errorMessage);
-                        }
-                    });
-                });
-                
-                // Handle modal close/cancel - clear pending proforma ID
-                $('.payment_modal').off('hidden.bs.modal.billing-receipt').on('hidden.bs.modal.billing-receipt', function() {
-                    console.log('Payment modal closed');
-                    if (window.pendingBillingReceiptProformaId) {
-                        console.log('Clearing pending billing receipt proforma ID');
-                        window.pendingBillingReceiptProformaId = null;
-                    }
-                    // Remove billing receipt mode marker
-                    $('.payment_modal').removeAttr('data-billing-receipt-mode');
-                });
-            }
-            
-            // Function to create billing receipt after payment is saved
-            function createBillingReceiptWithPayment(proformaId, paymentResponse) {
-                console.log('Creating billing receipt with payment info:', paymentResponse);
-                console.log('Proforma ID:', proformaId);
-                
-                if (!proformaId) {
-                    toastr.error('Proforma ID is missing');
-                    return;
-                }
-                
-                // Show loading message
-                toastr.info('Creating Billing-Receipt with payment information...', 'Please wait');
-                
-                var requestData = {
-                    _token: '{{ csrf_token() }}',
-                    payment_id: paymentResponse.payment_id || null,
-                    with_payment: true
-                };
-                
-                console.log('Request data for billing receipt creation:', requestData);
-                console.log('Request URL:', '{{ route("sells.create-billing-receive", ":id") }}'.replace(':id', proformaId));
-                
-                // AJAX call to create billing receipt with payment info
-                $.ajax({
-                    method: 'POST',
-                    url: '{{ route("sells.create-billing-receive", ":id") }}'.replace(':id', proformaId),
-                    data: requestData,
-                    timeout: 30000,
-                    success: function(response) {
-                        console.log('Billing receipt creation response:', response);
-                        
-                        if (response.success) {
-                            // Show different success messages based on whether payment was applied
-                            if (response.payment_applied) {
-                                toastr.success(response.msg);
-                                
-                                // Show additional success info
-                                if (response.tax_invoice_status === 'paid') {
-                                    toastr.info('Tax-Invoice payment status updated to: PAID', 'Payment Applied');
-                                } else if (response.tax_invoice_status === 'partial') {
-                                    toastr.info('Tax-Invoice payment status updated to: PARTIAL', 'Payment Applied');
-                                }
-                            } else {
-                                toastr.success(response.msg);
-                            }
-                            
-                            // Store the new billing receipt ID in localStorage for 1 minute
-                            if (response.billing_receipt_id) {
-                                storeNewBillingReceiptId(response.billing_receipt_id);
-                            }
-                            
-                            // Show loading overlay before reloading table
-                            showTableLoading();
-                            
-                            // Reload the table to show the new billing receipt and updated tax invoice
-                            summary_sales_table.ajax.reload();
-                            
-                            // Clear pending proforma ID
-                            window.pendingBillingReceiptProformaId = null;
-                            
-                            // Optionally redirect to the new billing receipt or show it
-                            if (response.redirect_url) {
-                                setTimeout(function() {
-                                    window.location.href = response.redirect_url;
-                                }, 2000);
-                            }
-                        } else {
-                            console.error('Billing receipt creation failed:', response);
-                            toastr.error(response.msg || 'Failed to create Billing-Receipt');
-                            window.pendingBillingReceiptProformaId = null;
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Billing-Receipt creation failed:', xhr, status, error);
-                        console.error('Response text:', xhr.responseText);
-                        console.error('Status:', xhr.status);
-                        
-                        var errorMessage = 'Failed to create Billing-Receipt';
-                        
-                        if (status === 'timeout') {
-                            errorMessage = 'Request timed out. Please try again.';
-                        } else if (xhr.status === 0) {
-                            errorMessage = 'Cannot connect to server. Please check your connection.';
-                        } else if (xhr.status === 404) {
-                            errorMessage = 'Route not found. Please check the URL configuration.';
-                        } else if (xhr.status === 500) {
-                            errorMessage = 'Server error occurred. Please check the server logs.';
-                        } else if (xhr.responseJSON && xhr.responseJSON.msg) {
-                            errorMessage = xhr.responseJSON.msg;
-                        } else if (xhr.responseText) {
-                            try {
-                                var errorResponse = JSON.parse(xhr.responseText);
-                                errorMessage = errorResponse.msg || errorResponse.message || errorResponse.error || errorMessage;
-                            } catch (e) {
-                                errorMessage = 'Error: ' + xhr.status + ' - ' + error;
-                            }
-                        }
-                        
-                        toastr.error(errorMessage);
-                        window.pendingBillingReceiptProformaId = null;
-                    }
-                });
-            }
+            // Billing receipt is now printed from the same VT transaction context.
 
             // Document Type Filter Checkboxes
             $(document).on('change', '.document-filter-checkbox', function() {
@@ -2046,6 +1687,199 @@
                 // Reload the DataTable with the new filter
                 summary_sales_table.ajax.reload();
             });
+
+            // Export Date Range Picker
+            $('#export_date_range').daterangepicker({
+                autoUpdateInput: false,
+                showDropdowns: true,
+                minYear: 2020,
+                maxYear: parseInt(moment().format('YYYY'), 10) + 1,
+                locale: {
+                    format: moment_date_format,
+                    separator: ' ~ ',
+                    applyLabel: 'Apply',
+                    cancelLabel: 'Clear',
+                    fromLabel: 'From',
+                    toLabel: 'To',
+                    customRangeLabel: 'Custom',
+                    weekLabel: 'W',
+                    daysOfWeek: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+                    monthNames: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+                    firstDay: 0
+                },
+                ranges: {
+                    'Today': [moment(), moment()],
+                    'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+                    'Last 7 Days': [moment().subtract(6, 'days'), moment()],
+                    'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+                    'This Month': [moment().startOf('month'), moment().endOf('month')],
+                    'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+                    'This Year': [moment().startOf('year'), moment().endOf('year')]
+                }
+            });
+
+            $('#export_date_range').on('apply.daterangepicker', function(ev, picker) {
+                $(this).val(picker.startDate.format(moment_date_format) + ' ~ ' + picker.endDate.format(moment_date_format));
+            });
+
+            $('#export_date_range').on('cancel.daterangepicker', function(ev, picker) {
+                $(this).val('');
+            });
+
+            function getExportDocumentFilter() {
+                var taxChecked = $('#export_filter_tax_invoice').is(':checked');
+                var billingChecked = $('#export_filter_billing_receive').is(':checked');
+
+                if (taxChecked && billingChecked) return 'both';
+                if (taxChecked && !billingChecked) return 'tax_invoice';
+                if (!taxChecked && billingChecked) return 'billing_receive';
+
+                // Prevent empty selection
+                $('#export_filter_tax_invoice, #export_filter_billing_receive').prop('checked', true);
+                return 'both';
+            }
+
+            function getExportColumns() {
+                var selected = $('.export-column:checked').map(function() {
+                    return $(this).val();
+                }).get();
+                return selected;
+            }
+
+            function syncExportColumnsSelectAll() {
+                var total = $('.export-column').length;
+                var checked = $('.export-column:checked').length;
+                $('#export_columns_all').prop('checked', total > 0 && total === checked);
+            }
+
+            // Export document type filter: ensure at least one
+            $(document).on('change', '#export_filter_tax_invoice, #export_filter_billing_receive', function() {
+                var taxChecked = $('#export_filter_tax_invoice').is(':checked');
+                var billingChecked = $('#export_filter_billing_receive').is(':checked');
+                if (!taxChecked && !billingChecked) {
+                    $('#export_filter_tax_invoice, #export_filter_billing_receive').prop('checked', true);
+                    toastr.warning('Please select at least one document type for export');
+                }
+            });
+
+            // Export columns: select all / sync
+            $(document).on('change', '#export_columns_all', function() {
+                var isChecked = $(this).is(':checked');
+                $('.export-column').prop('checked', isChecked);
+            });
+
+            $(document).on('change', '.export-column', function() {
+                syncExportColumnsSelectAll();
+            });
+
+            // Set default export date range to current month
+            var exportDefaultStart = moment().startOf('month');
+            var exportDefaultEnd = moment();
+            $('#export_date_range').data('daterangepicker').setStartDate(exportDefaultStart);
+            $('#export_date_range').data('daterangepicker').setEndDate(exportDefaultEnd);
+            $('#export_date_range').val(exportDefaultStart.format(moment_date_format) + ' ~ ' + exportDefaultEnd.format(moment_date_format));
+
+            // Export CSV Button
+            $('#btn_export_csv').on('click', function() {
+                exportSalesData('csv');
+            });
+
+            // Export XLSX Button
+            $('#btn_export_xlsx').on('click', function() {
+                exportSalesData('xlsx');
+            });
+
+            // Toggle Export Section
+            $('#btn_toggle_export').on('click', function() {
+                var isVisible = $('#export_section').is(':visible');
+                if (isVisible) {
+                    $('#export_section').slideUp(150);
+                    $(this).html('<i class="fa fa-chevron-down"></i> Show Export');
+                } else {
+                    $('#export_section').slideDown(150);
+                    $(this).html('<i class="fa fa-chevron-up"></i> Hide Export');
+                }
+            });
+
+            // Export Function
+            function exportSalesData(format) {
+                var btn = format === 'csv' ? $('#btn_export_csv') : $('#btn_export_xlsx');
+                var originalHtml = btn.html();
+
+                // Validate date range
+                if (!$('#export_date_range').val()) {
+                    toastr.warning('Please select a date range for export');
+                    return;
+                }
+
+                var startDate = $('#export_date_range').data('daterangepicker').startDate.format('YYYY-MM-DD');
+                var endDate = $('#export_date_range').data('daterangepicker').endDate.format('YYYY-MM-DD');
+
+                // Get current filters
+                var locationId = $('#summary_location_id').val() || '';
+                var customerId = $('#summary_customer_id').val() || '';
+                var paymentStatus = $('#summary_payment_status').val() || '';
+                var documentFilter = getExportDocumentFilter();
+                var exportColumns = getExportColumns();
+
+                if (exportColumns.length === 0) {
+                    toastr.warning('Please select at least one column for export');
+                    return;
+                }
+
+                // Show loading state
+                btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Exporting...');
+
+                // Build export URL
+                var exportUrl = '{{ route("sells.export-summary-sales") }}';
+                var params = new URLSearchParams({
+                    format: format,
+                    start_date: startDate,
+                    end_date: endDate,
+                    location_id: locationId,
+                    customer_id: customerId,
+                    payment_status: paymentStatus,
+                    document_filter: documentFilter,
+                    columns: exportColumns.join(',')
+                });
+
+                // Create a temporary link and trigger download
+                var downloadUrl = exportUrl + '?' + params.toString();
+
+                // Use fetch to check for errors first
+                fetch(downloadUrl, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    // Create download link
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = 'summary_sales_' + startDate + '_to_' + endDate + '.' + format;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    toastr.success('Export completed successfully');
+                    btn.prop('disabled', false).html(originalHtml);
+                })
+                .catch(error => {
+                    console.error('Export error:', error);
+                    toastr.error(error.message || 'Failed to export data');
+                    btn.prop('disabled', false).html(originalHtml);
+                });
+            }
         });
     </script>
     <script src="{{ asset('js/payment.js?v=' . $asset_v) }}"></script>

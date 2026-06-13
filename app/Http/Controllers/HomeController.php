@@ -6,6 +6,7 @@ use App\BusinessLocation;
 use App\Charts\CommonChart;
 use App\Currency;
 use App\Media;
+use App\Product;
 use App\Transaction;
 use App\User;
 use App\Utils\BusinessUtil;
@@ -19,6 +20,9 @@ use Datatables;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class HomeController extends Controller
 {
@@ -211,6 +215,1261 @@ class HomeController extends Controller
 
 
         return view('home.index', compact('sells_chart_1', 'sells_chart_2', 'widgets', 'all_locations', 'common_settings', 'is_admin'));
+    }
+
+    /**
+     * Dashboard V2 (sales-focused).
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function dashboardV2(Request $request)
+    {
+        if (!auth()->user()->can('dashboard.data')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $view_data = $this->buildDashboardV2Data($request, true);
+
+        return view('dashboard_v2', $view_data);
+    }
+
+    /**
+     * Export Dashboard V2 data as CSVs (zipped).
+     *
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function dashboardV2Export(Request $request)
+    {
+        if (!auth()->user()->can('dashboard.data')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $data = $this->buildDashboardV2Data($request, false);
+
+        $filename = 'dashboard_v2_' . $data['range_start']->format('Y-m-d') . '_to_' . $data['range_end']->format('Y-m-d') . '.csv';
+        $csvContent = $this->buildDashboardV2SingleCsv($data);
+
+        return response()->streamDownload(function () use ($csvContent) {
+            echo $csvContent;
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function dashboardV2AiSuggestions(Request $request)
+    {
+        if (!auth()->user()->can('dashboard.data')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        Log::info('Dashboard V2 AI suggestions requested', [
+            'user_id' => $request->session()->get('user.id'),
+            'business_id' => $request->session()->get('user.business_id'),
+            'period' => $request->get('period'),
+            'year' => $request->get('year'),
+            'start_date' => $request->get('start_date'),
+            'end_date' => $request->get('end_date'),
+        ]);
+
+        $cacheMinutes = (int) config('services.openai.cache_minutes', 60);
+        $cacheKey = $this->buildDashboardV2AiCacheKey($request, 'suggestions');
+
+        if ($cacheMinutes > 0) {
+            $cached = Cache::get($cacheKey);
+            if (!empty($cached)) {
+                $cached['cached'] = true;
+                return response()->json($cached);
+            }
+        }
+
+        $summary = $this->buildDashboardV2AiSummary($request);
+        Log::info('Dashboard V2 AI summary prepared', [
+            'period' => $summary['period'] ?? null,
+            'range_start' => $summary['range_start'] ?? null,
+            'range_end' => $summary['range_end'] ?? null,
+            'top_products_count' => isset($summary['top_products']) ? count($summary['top_products']) : 0,
+            'category_count' => isset($summary['category_breakdown']) ? count($summary['category_breakdown']) : 0,
+        ]);
+        $input = $this->buildDashboardV2AiSuggestionsInput($summary);
+        $result = $this->callOpenAi($input, null, 2500, $this->getDashboardV2AiSuggestionsFormat());
+
+        if (!$result['success']) {
+            Log::error('Dashboard V2 AI suggestions failed', [
+                'message' => $result['message'] ?? 'unknown',
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $result['message'] ?? 'AI request failed.',
+            ], 500);
+        }
+
+        $parsed = $this->parseDashboardV2AiJson($result['text'] ?? '');
+        if (empty($parsed)) {
+            Log::warning('Dashboard V2 AI suggestions returned non-JSON', [
+                'text' => $result['text'] ?? '',
+            ]);
+            $parsed = [
+                'title_en' => 'AI Suggestions',
+                'title_th' => 'คำแนะนำ AI',
+                'bullets_en' => [$result['text'] ?? 'No response'],
+                'bullets_th' => [],
+                'risks_en' => [],
+                'risks_th' => [],
+                'confidence' => 'low',
+                'assumptions_en' => [],
+                'assumptions_th' => [],
+            ];
+        }
+
+        $payload = [
+            'success' => true,
+            'data' => $this->normalizeDashboardV2AiData($parsed),
+            'response_id' => $result['response_id'] ?? null,
+            'cached' => false,
+        ];
+
+        if ($cacheMinutes > 0) {
+            Cache::put($cacheKey, $payload, now()->addMinutes($cacheMinutes));
+        }
+
+        return response()->json($payload);
+    }
+
+    public function dashboardV2AiChat(Request $request)
+    {
+        if (!auth()->user()->can('dashboard.data')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $message = trim((string) $request->input('message', ''));
+        if ($message === '') {
+            Log::warning('Dashboard V2 AI chat missing message', [
+                'user_id' => $request->session()->get('user.id'),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Message is required.',
+            ], 422);
+        }
+
+        Log::info('Dashboard V2 AI chat requested', [
+            'user_id' => $request->session()->get('user.id'),
+            'business_id' => $request->session()->get('user.business_id'),
+            'period' => $request->get('period'),
+            'year' => $request->get('year'),
+            'start_date' => $request->get('start_date'),
+            'end_date' => $request->get('end_date'),
+        ]);
+
+        $historyInput = $request->input('history', []);
+        if (!is_array($historyInput)) {
+            $historyInput = [];
+        }
+
+        $summary = $this->buildDashboardV2AiSummary($request);
+        Log::info('Dashboard V2 AI chat summary prepared', [
+            'period' => $summary['period'] ?? null,
+            'range_start' => $summary['range_start'] ?? null,
+            'range_end' => $summary['range_end'] ?? null,
+        ]);
+        $input = $this->buildDashboardV2AiChatInput($summary, $message, $historyInput);
+        $previousResponseId = $request->input('previous_response_id');
+        $result = $this->callOpenAi($input, $previousResponseId, 3000, $this->getDashboardV2AiChatFormat());
+
+        if (!$result['success']) {
+            Log::error('Dashboard V2 AI chat failed', [
+                'message' => $result['message'] ?? 'unknown',
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $result['message'] ?? 'AI request failed.',
+            ], 500);
+        }
+
+        $parsed = $this->parseDashboardV2AiJson($result['text'] ?? '');
+        if (empty($parsed)) {
+            Log::warning('Dashboard V2 AI chat returned non-JSON', [
+                'text' => $result['text'] ?? '',
+            ]);
+            $parsed = [
+                'reply_en' => $result['text'] ?? '',
+                'reply_th' => '',
+            ];
+        }
+
+        $payload = [
+            'success' => true,
+            'reply_en' => (string) ($parsed['reply_en'] ?? ''),
+            'reply_th' => (string) ($parsed['reply_th'] ?? ''),
+        ];
+
+        return response()->json($payload);
+    }
+
+    public function dashboardV2AiPurchasePlan(Request $request)
+    {
+        if (!auth()->user()->can('dashboard.data')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $budget = floatval($request->input('monthly_budget', 2200000));
+        $coverDays = intval($request->input('cover_days', 60));
+        $excludeProducts = trim((string) $request->input('exclude_products', ''));
+
+        if ($budget <= 0 || $coverDays <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid budget or cover days.',
+            ], 422);
+        }
+
+        Log::info('Dashboard V2 AI purchase plan requested', [
+            'user_id' => $request->session()->get('user.id'),
+            'business_id' => $request->session()->get('user.business_id'),
+            'budget' => $budget,
+            'cover_days' => $coverDays,
+            'exclude_products' => $excludeProducts,
+            'period' => $request->get('period'),
+        ]);
+
+        $summary = $this->buildDashboardV2AiSummary($request);
+        
+        $input = $this->buildDashboardV2AiPurchasePlanInput($summary, $budget, $coverDays, $excludeProducts);
+        // Keep max tokens modest to avoid long model runtimes that can hit web server timeouts
+        $result = $this->callOpenAi($input, null, 900, $this->getDashboardV2AiPurchasePlanFormat());
+
+        if (!$result['success']) {
+            Log::error('Dashboard V2 AI purchase plan failed', [
+                'message' => $result['message'] ?? 'unknown',
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => $result['message'] ?? 'AI request failed.',
+            ], 500);
+        }
+
+        $parsed = $this->parseDashboardV2AiJson($result['text'] ?? '');
+        if (empty($parsed)) {
+            Log::warning('Dashboard V2 AI purchase plan returned non-JSON', [
+                'text' => $result['text'] ?? '',
+            ]);
+            $parsed = [
+                'reply_en' => $result['text'] ?? '',
+                'reply_th' => '',
+            ];
+        }
+
+        $payload = [
+            'success' => true,
+            'reply_en' => (string) ($parsed['reply_en'] ?? ''),
+            'reply_th' => (string) ($parsed['reply_th'] ?? ''),
+        ];
+
+        return response()->json($payload);
+    }
+
+    private function buildDashboardV2CsvString(array $headers, array $rows): string
+    {
+        $handle = fopen('php://temp', 'r+');
+        fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+        fputcsv($handle, $headers);
+        foreach ($rows as $row) {
+            fputcsv($handle, $row);
+        }
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+
+        return $csv ?: '';
+    }
+
+    private function buildDashboardV2SingleCsv(array $data): string
+    {
+        $handle = fopen('php://temp', 'r+');
+        fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+        $writeSection = function (string $title, array $headers, array $rows) use ($handle) {
+            fputcsv($handle, [$title]);
+            fputcsv($handle, $headers);
+            foreach ($rows as $row) {
+                fputcsv($handle, $row);
+            }
+            fputcsv($handle, ['']);
+        };
+
+        $filterRows = [
+            ['Period', $data['period']],
+            ['Selected Year', $data['selected_year']],
+            ['Custom Start', $data['custom_start'] ?? ''],
+            ['Custom End', $data['custom_end'] ?? ''],
+            ['Range Start', $data['range_start']->format('Y-m-d')],
+            ['Range End', $data['range_end']->format('Y-m-d')],
+            ['Invoice Filter', 'invoice_no LIKE VT%'],
+        ];
+        $writeSection('Filters', ['Field', 'Value'], $filterRows);
+
+        $summaryRows = [
+            ['Total Revenue (Ex VAT)', (float) ($data['total_revenue_ex_vat'] ?? 0)],
+            ['Total VAT', (float) ($data['total_vat'] ?? 0)],
+            ['Total Revenue (Inc VAT)', (float) $data['total_revenue']],
+            ['Total Orders', (int) $data['total_orders']],
+            ['Products Sold', (float) $data['products_sold']],
+            ['Customers', (int) $data['total_customers']],
+        ];
+        $writeSection('Summary', ['Metric', 'Value'], $summaryRows);
+
+        $trendRows = [];
+        foreach ($data['trend_labels'] as $i => $label) {
+            $trendRows[] = [
+                $label,
+                (float) ($data['trend_revenue'][$i] ?? 0),
+                (float) ($data['trend_qty'][$i] ?? 0),
+            ];
+        }
+        $writeSection('Trend', ['Label', 'Revenue', 'Quantity'], $trendRows);
+
+        $topProductRows = [];
+        foreach ($data['top_products'] as $product) {
+            $topProductRows[] = [
+                $product->name ?? '',
+                (float) ($product->qty ?? 0),
+                (float) ($product->total ?? 0),
+            ];
+        }
+        $writeSection('Top Products', ['Product', 'Qty', 'Total'], $topProductRows);
+
+        $categoryRows = [];
+        foreach ($data['category_breakdown'] as $category) {
+            $categoryRows[] = [
+                $category['name'] ?? '',
+                (float) ($category['total'] ?? 0),
+                (float) ($category['percent'] ?? 0),
+            ];
+        }
+        $writeSection('Category Breakdown', ['Category', 'Total', 'Percent'], $categoryRows);
+
+        $productRows = [];
+        foreach ($data['period_products'] as $product) {
+            $productRows[] = [
+                $product->id ?? '',
+                $product->name ?? '',
+                (float) ($product->price_inc_tax ?? 0),
+                (float) ($product->stock ?? 0),
+                (float) ($product->qty_sold ?? 0),
+                (float) ($product->total_sold ?? 0),
+            ];
+        }
+        $writeSection(
+            'Products Sold',
+            ['Product ID', 'Product', 'Price Inc Tax', 'Stock', 'Qty Sold', 'Total Sold'],
+            $productRows
+        );
+
+        $notSoldRows = [];
+        foreach ($data['not_sold_products'] as $product) {
+            $notSoldRows[] = [
+                $product->id ?? '',
+                $product->name ?? '',
+                (float) ($product->price_inc_tax ?? 0),
+                (float) ($product->stock ?? 0),
+            ];
+        }
+        $writeSection('Products Not Sold', ['Product ID', 'Product', 'Price Inc Tax', 'Stock'], $notSoldRows);
+
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+
+        return $csv ?: '';
+    }
+
+    private function buildDashboardV2AiCacheKey(Request $request, string $suffix): string
+    {
+        $businessId = $request->session()->get('user.business_id');
+        $userId = $request->session()->get('user.id');
+        $payload = [
+            'business' => $businessId,
+            'user' => $userId,
+            'period' => $request->get('period', 'month'),
+            'year' => $request->get('year'),
+            'start' => $request->get('start_date'),
+            'end' => $request->get('end_date'),
+        ];
+
+        return 'dashv2_ai:' . $suffix . ':' . md5(json_encode($payload));
+    }
+
+    private function buildDashboardV2AiSummary(Request $request): array
+    {
+        $business_id = $request->session()->get('user.business_id');
+        $period = $request->get('period', 'month');
+        $now = \Carbon::now();
+        $selected_year = (int) $request->get('year', $now->year);
+        $custom_start = $request->get('start_date');
+        $custom_end = $request->get('end_date');
+
+        if (!empty($custom_start) && !empty($custom_end)) {
+            $start = \Carbon::parse($custom_start)->startOfDay();
+            $end = \Carbon::parse($custom_end)->endOfDay();
+        } else {
+            switch ($period) {
+                case 'day':
+                    $start = $now->copy()->startOfDay();
+                    $end = $now->copy()->endOfDay();
+                    break;
+                case 'week':
+                    $start = $now->copy()->startOfWeek();
+                    $end = $now->copy()->endOfWeek();
+                    break;
+                case 'year':
+                    $start = \Carbon::create($selected_year, 1, 1)->startOfYear();
+                    $end = \Carbon::create($selected_year, 12, 31)->endOfDay();
+                    break;
+                case 'month':
+                default:
+                    $period = 'month';
+                    $start = $now->copy()->startOfMonth();
+                    $end = $now->copy()->endOfMonth();
+                    break;
+            }
+        }
+
+        $base_transactions = Transaction::where('business_id', $business_id)
+            ->where('type', 'sell')
+            ->where('status', 'final')
+            ->where('invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('transaction_date', [$start, $end]);
+
+        $total_revenue = (float) (clone $base_transactions)->sum('final_total');
+        $order_tax_total = (float) (clone $base_transactions)->sum('tax_amount');
+        $product_tax_total = (float) DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->selectRaw('SUM((tsl.quantity - tsl.quantity_returned) * (CASE WHEN COALESCE(tsl.item_tax, 0) > 0 THEN tsl.item_tax WHEN (COALESCE(tsl.unit_price_inc_tax, 0) - COALESCE(tsl.unit_price, 0)) > 0 THEN (tsl.unit_price_inc_tax - tsl.unit_price) ELSE 0 END)) as total_tax')
+            ->value('total_tax');
+        $total_vat = $order_tax_total + $product_tax_total;
+        $total_revenue_ex_vat = max($total_revenue - $total_vat, 0);
+        $total_orders = (int) (clone $base_transactions)->count();
+        $total_customers = (int) (clone $base_transactions)->distinct('contact_id')->count('contact_id');
+
+        $products_sold = (float) DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->sum(DB::raw('(tsl.quantity - tsl.quantity_returned)'));
+
+        $trend_labels = [];
+        $trend_revenue = [];
+        $trend_qty = [];
+
+        if ($period === 'day') {
+            $revenue_map = (clone $base_transactions)
+                ->selectRaw('HOUR(transaction_date) as label, SUM(final_total) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $qty_map = DB::table('transaction_sell_lines as tsl')
+                ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->where('t.invoice_no', 'LIKE', 'VT%')
+                ->whereBetween('t.transaction_date', [$start, $end])
+                ->whereNull('tsl.parent_sell_line_id')
+                ->selectRaw('HOUR(t.transaction_date) as label, SUM(tsl.quantity - tsl.quantity_returned) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            for ($h = 0; $h < 24; $h++) {
+                $trend_labels[] = str_pad((string) $h, 2, '0', STR_PAD_LEFT);
+                $trend_revenue[] = (float) ($revenue_map[$h] ?? 0);
+                $trend_qty[] = (float) ($qty_map[$h] ?? 0);
+            }
+        } elseif ($period === 'year') {
+            $revenue_map = (clone $base_transactions)
+                ->selectRaw('DATE_FORMAT(transaction_date, "%Y-%m") as label, SUM(final_total) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $qty_map = DB::table('transaction_sell_lines as tsl')
+                ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->where('t.invoice_no', 'LIKE', 'VT%')
+                ->whereBetween('t.transaction_date', [$start, $end])
+                ->whereNull('tsl.parent_sell_line_id')
+                ->selectRaw('DATE_FORMAT(t.transaction_date, "%Y-%m") as label, SUM(tsl.quantity - tsl.quantity_returned) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $cursor = $start->copy();
+            while ($cursor->lte($end)) {
+                $label = $cursor->format('Y-m');
+                $trend_labels[] = $cursor->format('M');
+                $trend_revenue[] = (float) ($revenue_map[$label] ?? 0);
+                $trend_qty[] = (float) ($qty_map[$label] ?? 0);
+                $cursor->addMonth();
+            }
+        } else {
+            $revenue_map = (clone $base_transactions)
+                ->selectRaw('DATE(transaction_date) as label, SUM(final_total) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $qty_map = DB::table('transaction_sell_lines as tsl')
+                ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->where('t.invoice_no', 'LIKE', 'VT%')
+                ->whereBetween('t.transaction_date', [$start, $end])
+                ->whereNull('tsl.parent_sell_line_id')
+                ->selectRaw('DATE(t.transaction_date) as label, SUM(tsl.quantity - tsl.quantity_returned) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $cursor = $start->copy();
+            while ($cursor->lte($end)) {
+                $label = $cursor->format('Y-m-d');
+                $trend_labels[] = $cursor->format('j M');
+                $trend_revenue[] = (float) ($revenue_map[$label] ?? 0);
+                $trend_qty[] = (float) ($qty_map[$label] ?? 0);
+                $cursor->addDay();
+            }
+        }
+
+        $top_products = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->join('products as p', 'p.id', '=', 'tsl.product_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->selectRaw('p.name as name, SUM(tsl.quantity - tsl.quantity_returned) as qty, SUM(tsl.unit_price_inc_tax * (tsl.quantity - tsl.quantity_returned)) as total')
+            ->groupBy('p.id', 'p.name')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'name' => $row->name ?? '',
+                    'qty' => (float) ($row->qty ?? 0),
+                    'total' => (float) ($row->total ?? 0),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $category_rows = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->join('products as p', 'p.id', '=', 'tsl.product_id')
+            ->leftJoin('categories as c', 'c.id', '=', 'p.category_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->selectRaw('COALESCE(c.name, "Uncategorized") as category, SUM(tsl.unit_price_inc_tax * (tsl.quantity - tsl.quantity_returned)) as total')
+            ->groupBy('category')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
+
+        $category_total = $category_rows->sum('total');
+        $category_breakdown = [];
+        foreach ($category_rows as $row) {
+            $percent = $category_total > 0 ? round(($row->total / $category_total) * 100, 1) : 0;
+            $category_breakdown[] = [
+                'name' => $row->category,
+                'total' => (float) $row->total,
+            'percent' => $percent,
+            ];
+        }
+
+        $period_products = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->join('products as p', 'p.id', '=', 'tsl.product_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->selectRaw('p.id, p.name, tsl.variation_id, SUM(tsl.quantity - tsl.quantity_returned) as qty_sold, SUM(tsl.unit_price_inc_tax * (tsl.quantity - tsl.quantity_returned)) as total_sold')
+            ->groupBy('p.id', 'p.name', 'tsl.variation_id')
+            ->orderByDesc('total_sold')
+            ->limit(10)
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'id' => $row->id ?? '',
+                    'name' => $row->name ?? '',
+                    'variation_id' => $row->variation_id ?? '',
+                    'qty_sold' => (float) ($row->qty_sold ?? 0),
+                    'total_sold' => (float) ($row->total_sold ?? 0),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $sold_product_ids = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->select('tsl.product_id')
+            ->groupBy('tsl.product_id');
+
+        $not_sold_count = DB::table('products as p')
+            ->where('p.business_id', $business_id)
+            ->whereNotIn('p.id', $sold_product_ids)
+            ->count();
+
+        return [
+            'period' => $period,
+            'range_start' => $start->format('Y-m-d'),
+            'range_end' => $end->format('Y-m-d'),
+            'selected_year' => $selected_year,
+            'custom_start' => $custom_start,
+            'custom_end' => $custom_end,
+            'totals' => [
+                'total_revenue' => $total_revenue,
+                'total_revenue_ex_vat' => $total_revenue_ex_vat,
+                'total_vat' => $total_vat,
+                'total_orders' => $total_orders,
+                'total_customers' => $total_customers,
+                'products_sold' => $products_sold,
+            ],
+            'trend' => [
+                'labels' => $trend_labels,
+                'revenue' => $trend_revenue,
+                'quantity' => $trend_qty,
+            ],
+            'top_products' => $top_products,
+            'category_breakdown' => $category_breakdown,
+            'top_sold_products' => $period_products,
+            'not_sold_count' => $not_sold_count,
+        ];
+    }
+
+    private function buildDashboardV2AiSuggestionsInput(array $summary): array
+    {
+        $system = 'You are a supply planning assistant. Use only the provided data. Do not assume inventory or stock. If data is insufficient, say so. Provide concise, practical suggestions. Return JSON that matches the required schema.';
+        $user = [
+            'task' => 'Provide demand-based ordering suggestions and risks for the current filter range.',
+            'data' => $summary,
+        ];
+
+        return [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => json_encode($user)],
+        ];
+    }
+
+    private function buildDashboardV2AiChatInput(array $summary, string $message, array $history = []): array
+    {
+        $system = "You are a supply planning assistant. Use only the provided data. Do not assume inventory or stock. Return JSON that matches the required schema.\n\nContext Data:\n" . json_encode($summary);
+
+        $messages = [
+            ['role' => 'system', 'content' => $system],
+        ];
+
+        foreach ($history as $h) {
+            if (!is_array($h)) continue;
+            $role = isset($h['role']) && $h['role'] === 'assistant' ? 'assistant' : 'user';
+            $content = isset($h['content']) ? trim((string)$h['content']) : '';
+            if ($content !== '') {
+                $messages[] = ['role' => $role, 'content' => $content];
+            }
+        }
+
+        $lastHistory = end($messages);
+        if (!$lastHistory || $lastHistory['role'] !== 'user' || $lastHistory['content'] !== $message) {
+            $messages[] = ['role' => 'user', 'content' => $message];
+        }
+
+        return $messages;
+    }
+
+    private function buildDashboardV2AiPurchasePlanInput(array $summary, float $budget, int $coverDays, string $excludeProducts = ''): array
+    {
+        $system = "You are an expert purchasing and supply chain assistant. Use the provided sales data to generate a strategic purchasing plan. Do not assume inventory or stock not present in the data. Return JSON that matches the required schema, translating the final plan carefully and professionally to Thai in the `reply_th` field.\n\nContext Data:\n" . json_encode($summary);
+
+        $totalBudget = $budget * ($coverDays / 30);
+        $message = "Please generate an itemized purchasing plan to cover the next $coverDays days. The allocated monthly budget is " . number_format($budget, 2) . ", meaning the total budget for this period is " . number_format($totalBudget, 2) . ". Analyze the top selling products from the historical data provided, their prices, and suggest quantities to reorder that balance the budget effectively while maximizing revenue. Please provide a detailed response formatted using Markdown.";
+
+        if (!empty($excludeProducts)) {
+            $message .= "\n\nIMPORTANT: Do not recommend purchasing any of the following excluded products: " . $excludeProducts . ". Ignore them in your allocation even if they have high sales.";
+        }
+
+        $messages = [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $message]
+        ];
+
+        return $messages;
+    }
+
+    private function callOpenAi(array $input, ?string $previousResponseId = null, int $maxTokens = 600, ?array $textFormat = null): array
+    {
+        $apiKey = (string) config('services.openai.key');
+        if ($apiKey === '') {
+            Log::error('OpenAI API key missing');
+            return [
+                'success' => false,
+                'message' => 'OpenAI API key is not configured.',
+            ];
+        }
+
+        $model = (string) config('services.openai.model', 'gpt-4o-mini');
+        if ($model === 'gpt-5-mini') {
+            $model = 'gpt-4o-mini';
+        }
+
+        $payload = [
+            'model' => $model,
+            'messages' => $input,
+            'max_tokens' => $maxTokens,
+        ];
+
+        if (!empty($textFormat)) {
+            $payload['response_format'] = $textFormat;
+        }
+
+        try {
+            Log::info('OpenAI API request', [
+                'model' => $payload['model'],
+                'max_tokens' => $payload['max_tokens'],
+                'has_previous_response' => !empty($previousResponseId),
+                'input_bytes' => strlen(json_encode($payload['messages'])),
+                'payload_messages' => $payload['messages'] // Added detailed payload logging
+            ]);
+
+            $headers = [
+                'Authorization' => 'Bearer ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ];
+            $org = (string) config('services.openai.organization');
+            if ($org !== '') {
+                $headers['OpenAI-Organization'] = $org;
+            }
+
+            $response = Http::withHeaders($headers)
+                ->withOptions([
+                    'expect' => false,
+                    'version' => 1.1,
+                    'curl' => [
+                        CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4, // force IPv4 to avoid IPv6 stalls
+                    ],
+                ])
+                ->timeout((int) config('services.openai.timeout', 60))
+                ->connectTimeout(5)
+                ->retry(2, 500) // retry brief network hiccups; stays under FastCGI 30s budget
+                ->post('https://api.openai.com/v1/chat/completions', $payload);
+
+            if (!$response->ok()) {
+                $body = $response->body();
+                Log::error('OpenAI API error response', [
+                    'status' => $response->status(),
+                    'body' => $body,
+                ]);
+                $message = 'OpenAI API error: ' . $response->status();
+                if (config('app.debug') && !empty($body)) {
+                    $message .= ' - ' . substr($body, 0, 1000);
+                }
+                return [
+                    'success' => false,
+                    'message' => $message,
+                ];
+            }
+
+            $body = $response->json();
+            $text = $body['choices'][0]['message']['content'] ?? '';
+
+            Log::info('OpenAI API response received', [
+                'response_id' => $body['id'] ?? null,
+                'text_preview' => substr($text, 0, 500) . '...' // Added log for the response text
+            ]);
+
+            if (trim($text) === '') {
+                Log::warning('OpenAI API returned empty output text', [
+                    'response' => $body,
+                ]);
+            }
+
+            return [
+                'success' => true,
+                'text' => $text,
+                'response_id' => $body['id'] ?? null,
+            ];
+        } catch (\Exception $e) {
+            Log::error('OpenAI API exception', [
+                'message' => $e->getMessage(),
+            ]);
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    private function getDashboardV2AiSuggestionsFormat(): array
+    {
+        return [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'dashboard_v2_ai_suggestions',
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'title_en' => ['type' => 'string'],
+                        'title_th' => ['type' => 'string'],
+                        'bullets_en' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'bullets_th' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'risks_en' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'risks_th' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'assumptions_en' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'assumptions_th' => ['type' => 'array', 'items' => ['type' => 'string']],
+                        'confidence' => ['type' => 'string', 'enum' => ['low', 'medium', 'high']],
+                    ],
+                    'required' => [
+                        'title_en',
+                        'title_th',
+                        'bullets_en',
+                        'bullets_th',
+                        'risks_en',
+                        'risks_th',
+                        'assumptions_en',
+                        'assumptions_th',
+                        'confidence',
+                    ],
+                    'additionalProperties' => false,
+                ],
+                'strict' => true,
+            ]
+        ];
+    }
+
+    private function getDashboardV2AiChatFormat(): array
+    {
+        return [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'dashboard_v2_ai_chat',
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'reply_en' => ['type' => 'string'],
+                        'reply_th' => ['type' => 'string'],
+                    ],
+                    'required' => ['reply_en', 'reply_th'],
+                    'additionalProperties' => false,
+                ],
+                'strict' => true,
+            ]
+        ];
+    }
+
+    private function getDashboardV2AiPurchasePlanFormat(): array
+    {
+        return [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'purchase_plan',
+                'description' => 'A strategic product purchasing plan with English and Thai formats, plus suggested items details.',
+                'schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'reply_en' => [
+                            'type' => 'string',
+                            'description' => 'The English response formatted in markdown.',
+                        ],
+                        'reply_th' => [
+                            'type' => 'string',
+                            'description' => 'The Thai translation of the response formatted in markdown.',
+                        ],
+                        'suggested_items' => [
+                            'type' => 'array',
+                            'description' => 'List of suggested items to purchase based on the plan',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'variation_id' => [
+                                        'type' => 'integer',
+                                        'description' => 'The variation_id of the product'
+                                    ],
+                                    'quantity' => [
+                                        'type' => 'number',
+                                        'description' => 'The suggested quantity to purchase'
+                                    ]
+                                ],
+                                'required' => ['variation_id', 'quantity'],
+                                'additionalProperties' => false
+                            ]
+                        ]
+                    ],
+                    'required' => ['reply_en', 'reply_th', 'suggested_items'],
+                    'additionalProperties' => false,
+                ],
+                'strict' => true,
+            ],
+        ];
+    }
+
+    private function parseDashboardV2AiJson(string $text): ?array
+    {
+        $clean = trim($text);
+        if ($clean === '') {
+            return null;
+        }
+
+        if (preg_match('/```(?:json)?(.*?)```/s', $clean, $matches)) {
+            $clean = trim($matches[1]);
+        }
+
+        $decoded = json_decode($clean, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            return $decoded;
+        }
+
+        return null;
+    }
+
+    private function normalizeDashboardV2AiData(array $data): array
+    {
+        $normalizeList = function ($value) {
+            if (is_string($value)) {
+                return [$value];
+            }
+            if (is_array($value)) {
+                return array_values(array_filter($value, function ($item) {
+                    return is_string($item) && trim($item) !== '';
+                }));
+            }
+            return [];
+        };
+
+        return [
+            'title_en' => (string) ($data['title_en'] ?? 'AI Suggestions'),
+            'title_th' => (string) ($data['title_th'] ?? 'คำแนะนำ AI'),
+            'bullets_en' => $normalizeList($data['bullets_en'] ?? []),
+            'bullets_th' => $normalizeList($data['bullets_th'] ?? []),
+            'risks_en' => $normalizeList($data['risks_en'] ?? []),
+            'risks_th' => $normalizeList($data['risks_th'] ?? []),
+            'assumptions_en' => $normalizeList($data['assumptions_en'] ?? []),
+            'assumptions_th' => $normalizeList($data['assumptions_th'] ?? []),
+            'confidence' => (string) ($data['confidence'] ?? 'medium'),
+        ];
+    }
+
+    private function buildDashboardV2Data(Request $request, bool $paginateNotSold = true): array
+    {
+        $business_id = $request->session()->get('user.business_id');
+        $period = $request->get('period', 'month');
+        $now = \Carbon::now();
+        $selected_year = (int) $request->get('year', $now->year);
+        $custom_start = $request->get('start_date');
+        $custom_end = $request->get('end_date');
+
+        if (!empty($custom_start) && !empty($custom_end)) {
+            $start = \Carbon::parse($custom_start)->startOfDay();
+            $end = \Carbon::parse($custom_end)->endOfDay();
+        } else {
+            switch ($period) {
+                case 'day':
+                    $start = $now->copy()->startOfDay();
+                    $end = $now->copy()->endOfDay();
+                    break;
+                case 'week':
+                    $start = $now->copy()->startOfWeek();
+                    $end = $now->copy()->endOfWeek();
+                    break;
+                case 'year':
+                    $start = \Carbon::create($selected_year, 1, 1)->startOfYear();
+                    $end = \Carbon::create($selected_year, 12, 31)->endOfDay();
+                    break;
+                case 'month':
+                default:
+                    $period = 'month';
+                    // Strict Month Logic: Match Old POS/Server.js YYYY-MM logic
+                    $start = $now->copy()->startOfMonth();
+                    $end = $now->copy()->endOfMonth();
+                    break;
+            }
+        }
+        $year_options = range($now->year, $now->year - 5);
+
+        // Core Query - Consistent with Old POS "Sales" logic
+        $base_transactions = Transaction::where('business_id', $business_id)
+            ->where('type', 'sell')
+            ->where('status', 'final')
+            // Remove Invoice No Filter if Old POS didn't have it, but keeping it if it's a specific requirement for the new system.
+            // Old POS didn't seem to filter by Invoice No 'VT%', but user might want it retained.
+            // I will keep it but add a comment that this restricts to specific invoice series.
+            ->where('invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('transaction_date', [$start, $end]);
+
+        // Revenue Calculation: Sum of final_total (Old POS: grand_total)
+        $total_revenue = (float) (clone $base_transactions)->sum('final_total');
+        $order_tax_total = (float) (clone $base_transactions)->sum('tax_amount');
+        $product_tax_total = (float) DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->selectRaw('SUM((tsl.quantity - tsl.quantity_returned) * (CASE WHEN COALESCE(tsl.item_tax, 0) > 0 THEN tsl.item_tax WHEN (COALESCE(tsl.unit_price_inc_tax, 0) - COALESCE(tsl.unit_price, 0)) > 0 THEN (tsl.unit_price_inc_tax - tsl.unit_price) ELSE 0 END)) as total_tax')
+            ->value('total_tax');
+        $total_vat = $order_tax_total + $product_tax_total;
+        $total_revenue_ex_vat = max($total_revenue - $total_vat, 0);
+
+        $total_orders = (clone $base_transactions)->count();
+        $total_customers = (clone $base_transactions)->distinct('contact_id')->count('contact_id');
+
+        $products_sold = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->sum(DB::raw('(tsl.quantity - tsl.quantity_returned)'));
+
+        $trend_labels = [];
+        $trend_revenue = [];
+        $trend_qty = [];
+
+        if ($period === 'day') {
+            $revenue_map = (clone $base_transactions)
+                ->selectRaw('HOUR(transaction_date) as label, SUM(final_total) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $qty_map = DB::table('transaction_sell_lines as tsl')
+                ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->where('t.invoice_no', 'LIKE', 'VT%')
+                ->whereBetween('t.transaction_date', [$start, $end])
+                ->whereNull('tsl.parent_sell_line_id')
+                ->selectRaw('HOUR(t.transaction_date) as label, SUM(tsl.quantity - tsl.quantity_returned) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            for ($h = 0; $h < 24; $h++) {
+                $trend_labels[] = str_pad((string) $h, 2, '0', STR_PAD_LEFT);
+                $trend_revenue[] = (float) ($revenue_map[$h] ?? 0);
+                $trend_qty[] = (float) ($qty_map[$h] ?? 0);
+            }
+        } elseif ($period === 'year') {
+            $revenue_map = (clone $base_transactions)
+                ->selectRaw('DATE_FORMAT(transaction_date, "%Y-%m") as label, SUM(final_total) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $qty_map = DB::table('transaction_sell_lines as tsl')
+                ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->where('t.invoice_no', 'LIKE', 'VT%')
+                ->whereBetween('t.transaction_date', [$start, $end])
+                ->whereNull('tsl.parent_sell_line_id')
+                ->selectRaw('DATE_FORMAT(t.transaction_date, "%Y-%m") as label, SUM(tsl.quantity - tsl.quantity_returned) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $cursor = $start->copy();
+            while ($cursor->lte($end)) {
+                $label = $cursor->format('Y-m');
+                $trend_labels[] = $cursor->format('M');
+                $trend_revenue[] = (float) ($revenue_map[$label] ?? 0);
+                $trend_qty[] = (float) ($qty_map[$label] ?? 0);
+                $cursor->addMonth();
+            }
+        } else {
+            $revenue_map = (clone $base_transactions)
+                ->selectRaw('DATE(transaction_date) as label, SUM(final_total) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $qty_map = DB::table('transaction_sell_lines as tsl')
+                ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final')
+                ->where('t.invoice_no', 'LIKE', 'VT%')
+                ->whereBetween('t.transaction_date', [$start, $end])
+                ->whereNull('tsl.parent_sell_line_id')
+                ->selectRaw('DATE(t.transaction_date) as label, SUM(tsl.quantity - tsl.quantity_returned) as total')
+                ->groupBy('label')
+                ->pluck('total', 'label')
+                ->toArray();
+
+            $cursor = $start->copy();
+            while ($cursor->lte($end)) {
+                $label = $cursor->format('Y-m-d');
+                $trend_labels[] = $cursor->format('j M');
+                $trend_revenue[] = (float) ($revenue_map[$label] ?? 0);
+                $trend_qty[] = (float) ($qty_map[$label] ?? 0);
+                $cursor->addDay();
+            }
+        }
+
+        $top_products = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->join('products as p', 'p.id', '=', 'tsl.product_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->selectRaw('p.name as name, SUM(tsl.quantity - tsl.quantity_returned) as qty, SUM(tsl.unit_price_inc_tax * (tsl.quantity - tsl.quantity_returned)) as total')
+            ->groupBy('p.id', 'p.name')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get();
+
+        $category_rows = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->join('products as p', 'p.id', '=', 'tsl.product_id')
+            ->leftJoin('categories as c', 'c.id', '=', 'p.category_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->selectRaw('COALESCE(c.name, "Uncategorized") as category, SUM(tsl.unit_price_inc_tax * (tsl.quantity - tsl.quantity_returned)) as total')
+            ->groupBy('category')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get();
+
+        $category_total = $category_rows->sum('total');
+        $category_colors = ['#6C5CE7', '#00B894', '#0984E3', '#E17055', '#FDCB6E', '#00CEC9'];
+        $category_breakdown = [];
+        foreach ($category_rows as $index => $row) {
+            $percent = $category_total > 0 ? round(($row->total / $category_total) * 100, 1) : 0;
+            $category_breakdown[] = [
+                'name' => $row->category,
+                'total' => $row->total,
+                'percent' => $percent,
+                'color' => $category_colors[$index % count($category_colors)],
+            ];
+        }
+
+        $period_sales = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->join('products as p', 'p.id', '=', 'tsl.product_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->selectRaw('p.id, p.name, p.image, SUM(tsl.quantity - tsl.quantity_returned) as qty_sold, SUM(tsl.unit_price_inc_tax * (tsl.quantity - tsl.quantity_returned)) as total_sold')
+            ->groupBy('p.id', 'p.name', 'p.image');
+
+        $stock_sub = DB::table('variations as v')
+            ->leftJoin('variation_location_details as vld', 'v.id', '=', 'vld.variation_id')
+            ->selectRaw('v.product_id, SUM(COALESCE(vld.qty_available, 0)) as stock')
+            ->groupBy('v.product_id');
+
+        $price_sub = DB::table('variations as v')
+            ->selectRaw('v.product_id, MIN(v.sell_price_inc_tax) as price_inc_tax')
+            ->groupBy('v.product_id');
+
+        $period_products = $period_sales
+            ->leftJoinSub($stock_sub, 'stock', function ($join) {
+                $join->on('stock.product_id', '=', 'p.id');
+            })
+            ->leftJoinSub($price_sub, 'price', function ($join) {
+                $join->on('price.product_id', '=', 'p.id');
+            })
+            ->addSelect('stock.stock', 'price.price_inc_tax')
+            ->orderByDesc('total_sold')
+            ->get();
+
+        $sold_product_ids = DB::table('transaction_sell_lines as tsl')
+            ->join('transactions as t', 't.id', '=', 'tsl.transaction_id')
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->where('t.invoice_no', 'LIKE', 'VT%')
+            ->whereBetween('t.transaction_date', [$start, $end])
+            ->whereNull('tsl.parent_sell_line_id')
+            ->select('tsl.product_id')
+            ->groupBy('tsl.product_id');
+
+        $not_sold_query = DB::table('products as p')
+            ->leftJoinSub($stock_sub, 'stock', function ($join) {
+                $join->on('stock.product_id', '=', 'p.id');
+            })
+            ->leftJoinSub($price_sub, 'price', function ($join) {
+                $join->on('price.product_id', '=', 'p.id');
+            })
+            ->where('p.business_id', $business_id)
+            ->whereNotIn('p.id', $sold_product_ids)
+            ->select('p.id', 'p.name', 'p.image', 'stock.stock', 'price.price_inc_tax')
+            ->orderByDesc('price.price_inc_tax');
+
+        $not_sold_products = $paginateNotSold
+            ? $not_sold_query->paginate(12, ['*'], 'not_sold_page')
+            : $not_sold_query->get();
+
+        return [
+            'period' => $period,
+            'range_start' => $start,
+            'range_end' => $end,
+            'selected_year' => $selected_year,
+            'year_options' => $year_options,
+            'custom_start' => $custom_start,
+            'custom_end' => $custom_end,
+            'total_revenue' => $total_revenue,
+            'total_revenue_ex_vat' => $total_revenue_ex_vat,
+            'total_vat' => $total_vat,
+            'total_orders' => $total_orders,
+            'total_customers' => $total_customers,
+            'products_sold' => $products_sold,
+            'trend_labels' => $trend_labels,
+            'trend_revenue' => $trend_revenue,
+            'trend_qty' => $trend_qty,
+            'top_products' => $top_products,
+            'category_breakdown' => $category_breakdown,
+            'period_products' => $period_products,
+            'not_sold_products' => $not_sold_products,
+        ];
     }
 
     /**

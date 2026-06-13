@@ -1,6 +1,12 @@
-@extends('layouts.app')
+@extends(($is_public ?? false) ? 'layouts.public' : 'layouts.app')
 
 @section('title', 'Products V2 - Multi-Level Categories')
+
+@php
+    $display_business_id = $business_id ?? (session('user.business_id') ?? 1);
+    $total_products_count = $total_products_count ?? \App\Product::where('business_id', $display_business_id)->count();
+    $is_public = $is_public ?? false;
+@endphp
 
 @section('css')
 <style>
@@ -83,7 +89,7 @@ body.sidebar-mini.sidebar-collapse .content-wrapper {
         <div class="container-fluid">
             <h1>Products V2 - Multi-Level Categories 
                 <span class="label label-primary" style="font-size: 16px; margin-left: 15px;">
-                    <i class="fa fa-database"></i> Total in DB: {{ \App\Product::where('business_id', 1)->count() }}
+                    <i class="fa fa-database"></i> Total in DB: {{ $total_products_count }}
                 </span>
             </h1>
         </div>
@@ -97,9 +103,11 @@ body.sidebar-mini.sidebar-collapse .content-wrapper {
                     <div class="box-header with-border">
                         <h3 class="box-title">Product Filters</h3>
                         <div class="box-tools pull-right">
-                            <a href="{{ action([\App\Http\Controllers\ProductController::class, 'create']) }}" class="btn btn-primary">
-                                <i class="fa fa-plus"></i> Add New Product
-                            </a>
+                            @if(!$is_public)
+                                <a href="{{ action([\App\Http\Controllers\ProductController::class, 'create']) }}" class="btn btn-primary">
+                                    <i class="fa fa-plus"></i> Add New Product
+                                </a>
+                            @endif
                         </div>
                     </div>
                     
@@ -117,7 +125,8 @@ body.sidebar-mini.sidebar-collapse .content-wrapper {
                                 <div class="form-group">
                                     <label>Category</label>
                                     <select id="category_filter" class="form-control hierarchical-select">
-                                        <option value="">All Categories</option>
+                                        <option value="__all__" selected>All Categories</option>
+                                        <option value="__uncategorized__">Uncategorized</option>
                                         @foreach($hierarchical_categories as $category)
                                             <option value="{{ $category['id'] }}" data-level="{{ $category['level'] }}">
                                                 {!! $category['display_name'] !!}
@@ -231,8 +240,39 @@ body.sidebar-mini.sidebar-collapse .content-wrapper {
 
 @section('javascript')
 <script>
+@php
+    $publicListAllUrl = \Illuminate\Support\Facades\Route::has('public.products.all')
+        ? route('public.products.all')
+        : url('public/products/all');
+    $privateListAllUrl = \Illuminate\Support\Facades\Route::has('products-v2.all')
+        ? route('products-v2.all')
+        : url('products-v2/all');
+
+    $publicListBySubcategoryUrl = \Illuminate\Support\Facades\Route::has('public.products.by-subcategory')
+        ? route('public.products.by-subcategory')
+        : url('public/products/by-subcategory');
+    $privateListBySubcategoryUrl = \Illuminate\Support\Facades\Route::has('products-v2.by-subcategory')
+        ? route('products-v2.by-subcategory')
+        : url('products-v2/by-subcategory');
+
+    $publicViewUrlTemplate = \Illuminate\Support\Facades\Route::has('public.products.view')
+        ? route('public.products.view', ['id' => '__PRODUCT_ID__'])
+        : url('public/products/view/__PRODUCT_ID__');
+    $privateViewUrlTemplate = \Illuminate\Support\Facades\Route::has('products-v2.view')
+        ? route('products-v2.view', ['id' => '__PRODUCT_ID__'])
+        : url('products-v2/view/__PRODUCT_ID__');
+@endphp
+
 // Base URL for proper routing in subdirectory
 var baseUrl = '{{ url("/") }}';
+var isPublic = {!! $is_public ? 'true' : 'false' !!};
+var publicBusinessId = isPublic ? '{{ $display_business_id }}' : '';
+var listAllUrl = isPublic ? @json($publicListAllUrl) : @json($privateListAllUrl);
+var listBySubcategoryUrl = isPublic ? @json($publicListBySubcategoryUrl) : @json($privateListBySubcategoryUrl);
+var viewUrlTemplate = isPublic ? @json($publicViewUrlTemplate) : @json($privateViewUrlTemplate);
+var deleteUrlBase = isPublic ? '{{ url("public/products") }}' : (baseUrl + '/products-v2');
+var editUrlBase = baseUrl + '/products/';
+var openingStockUrlBase = baseUrl + '/opening-stock/add/';
 
 $(document).ready(function() {
     // Load products on page load
@@ -246,7 +286,7 @@ $(document).ready(function() {
     // Clear filters
     $('#clear_filters').click(function() {
         $('#search').val('');
-        $('#category_filter').val('');
+        $('#category_filter').val('__all__');
         $('#brand_filter').val('');
         $('#product_type_filter').val('');
         $('#include_subcategories').prop('checked', true);
@@ -274,8 +314,9 @@ $(document).ready(function() {
         $('#products_container').empty();
         
         $.ajax({
-            url: '{{ route("products-v2.all") }}',
+            url: listAllUrl,
             type: 'GET',
+            data: isPublic ? { business_id: publicBusinessId } : {},
             dataType: 'json',
             success: function(response) {
                 $('#loading').hide();
@@ -295,14 +336,23 @@ $(document).ready(function() {
     }
     
     function applyFilters() {
+        var selectedCategory = $('#category_filter').val();
         var filters = {
-            category_id: $('#category_filter').val(),
             brand_id: $('#brand_filter').val(),
             product_type: $('#product_type_filter').val(),
             search: $('#search').val(),
             group_by_category: $('#group_by_category').is(':checked'),
             include_subcategories: $('#include_subcategories').is(':checked')
         };
+
+        // Avoid empty-string ambiguity: send category_id only when an actual filter is selected.
+        if (selectedCategory && selectedCategory !== '__all__') {
+            filters.category_id = selectedCategory;
+        }
+
+        if (isPublic) {
+            filters.business_id = publicBusinessId;
+        }
         
         console.log('Applying filters:', filters);
         
@@ -310,7 +360,7 @@ $(document).ready(function() {
         $('#products_container').empty();
         
         // Use the by-subcategory endpoint for filtered results
-        var endpoint = '{{ route("products-v2.by-subcategory") }}';
+        var endpoint = listBySubcategoryUrl;
         console.log('Using endpoint:', endpoint);
         
         $.ajax({
@@ -373,14 +423,16 @@ $(document).ready(function() {
                 html += '<td>' + (product.unit_name || '-') + '</td>';
                 html += '<td><span class="label label-success">' + (product.total_stock || '0') + '</span></td>';
                 html += '<td><strong>' + (product.selling_price || '0.00') + '฿ </strong></td>';
-                html += '<td>' + product.created_at + '</td>';
-                html += '<td class="action-buttons">';
-                html += '<button class="btn btn-xs btn-info" onclick="viewProduct(' + product.id + ')" title="View"><i class="fa fa-eye"></i></button> ';
-                html += '<a href="' + baseUrl + '/products/' + product.id + '/edit" class="btn btn-xs btn-primary" title="Edit"><i class="fa fa-edit"></i></a> ';
-                html += '<a href="' + baseUrl + '/opening-stock/add/' + product.id + '" class="btn btn-xs btn-success" title="Add Opening Stock"><i class="fa fa-plus-square"></i></a> ';
-                html += '<button class="btn btn-xs btn-danger" onclick="deleteProduct(' + product.id + ')" title="Delete"><i class="fa fa-trash"></i></button>';
-                html += '</td>';
-                html += '</tr>';
+        html += '<td>' + product.created_at + '</td>';
+        html += '<td class="action-buttons">';
+        html += '<button class="btn btn-xs btn-info" onclick="viewProduct(' + product.id + ')" title="View"><i class="fa fa-eye"></i></button> ';
+        if (!isPublic) {
+            html += '<a href="' + editUrlBase + product.id + '/edit" class="btn btn-xs btn-primary" title="Edit"><i class="fa fa-edit"></i></a> ';
+            html += '<a href="' + openingStockUrlBase + product.id + '" class="btn btn-xs btn-success" title="Add Opening Stock"><i class="fa fa-plus-square"></i></a> ';
+            html += '<button class="btn btn-xs btn-danger" onclick="deleteProduct(' + product.id + ')" title="Delete"><i class="fa fa-trash"></i></button>';
+        }
+        html += '</td>';
+        html += '</tr>';
             });
         } else {
             html += '<tr><td colspan="11" class="text-center">No products found</td></tr>';
@@ -433,14 +485,16 @@ $(document).ready(function() {
                 html += '<td>' + (product.unit_name || '-') + '</td>';
                 html += '<td><span class="label label-success">' + (product.total_stock || '0') + '</span></td>';
                 html += '<td><strong>' + (product.selling_price || '0.00') + '฿</strong></td>';
-                html += '<td>' + product.created_at + '</td>';
-                html += '<td class="action-buttons">';
-                html += '<button class="btn btn-xs btn-info" onclick="viewProduct(' + product.id + ')" title="View"><i class="fa fa-eye"></i></button> ';
-                html += '<a href="' + baseUrl + '/products/' + product.id + '/edit" class="btn btn-xs btn-primary" title="Edit"><i class="fa fa-edit"></i></a> ';
-                html += '<a href="' + baseUrl + '/opening-stock/add/' + product.id + '" class="btn btn-xs btn-success" title="Add Opening Stock"><i class="fa fa-plus-square"></i></a> ';
+            html += '<td>' + product.created_at + '</td>';
+            html += '<td class="action-buttons">';
+            html += '<button class="btn btn-xs btn-info" onclick="viewProduct(' + product.id + ')" title="View"><i class="fa fa-eye"></i></button> ';
+            if (!isPublic) {
+                html += '<a href="' + editUrlBase + product.id + '/edit" class="btn btn-xs btn-primary" title="Edit"><i class="fa fa-edit"></i></a> ';
+                html += '<a href="' + openingStockUrlBase + product.id + '" class="btn btn-xs btn-success" title="Add Opening Stock"><i class="fa fa-plus-square"></i></a> ';
                 html += '<button class="btn btn-xs btn-danger" onclick="deleteProduct(' + product.id + ')" title="Delete"><i class="fa fa-trash"></i></button>';
-                html += '</td>';
-                html += '</tr>';
+            }
+            html += '</td>';
+            html += '</tr>';
             });
             
             html += '</tbody></table></div>';
@@ -461,6 +515,9 @@ $(document).ready(function() {
     }
     
     window.deleteProduct = function(productId) {
+        if (isPublic) {
+            return;
+        }
         swal({
             title: "Are you sure?",
             text: "You want to delete this product?",
@@ -470,7 +527,7 @@ $(document).ready(function() {
         }).then((willDelete) => {
             if (willDelete) {
                 $.ajax({
-                url: baseUrl + '/products-v2/' + productId,
+                url: deleteUrlBase + '/' + productId,
                     type: 'DELETE',
                     data: {
                         '_token': '{{ csrf_token() }}'
@@ -495,7 +552,7 @@ $(document).ready(function() {
     // Function to view product in modal
     window.viewProduct = function(productId) {
         $.ajax({
-            url: '{{ route("products-v2.view", ":id") }}'.replace(':id', productId),
+            url: viewUrlTemplate.replace('__PRODUCT_ID__', productId),
             type: 'GET',
             success: function(response) {
                 $('#view_product_modal').html(response);

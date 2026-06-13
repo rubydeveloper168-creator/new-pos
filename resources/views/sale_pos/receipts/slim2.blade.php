@@ -355,110 +355,51 @@
 				</div>
 			@endif
 			<div class="bb-lg mt-15 mb-10"></div>
-            <table style="padding-top: 5px !important" class="border-bottom width-100 table-f-12 mb-10">
-                <tbody>
-                	@forelse($receipt_details->lines as $line)
-	                    <tr class="bb-lg">
-	                        <td class="description">
-	                        	<div style="display:flex; width: 100%;">
-	                        		<p class="m-0 mt-5" style="white-space: nowrap;">#{{$loop->iteration}}.&nbsp;</p>
-	                        		<p class="text-left m-0 mt-5 pull-left">{{$line['name']}}  
-			                        	@if(!empty($line['sub_sku'])), {{$line['sub_sku']}} @endif @if(!empty($line['brand'])), {{$line['brand']}} @endif @if(!empty($line['cat_code'])), {{$line['cat_code']}}@endif
-			                        	@if(!empty($line['product_custom_fields'])), {{$line['product_custom_fields']}} @endif
-			                        	@if(!empty($line['product_description']))
-			                        		<br>
-			                            	<span class="f-8">
-			                            		{!!$line['product_description']!!}
-			                            	</span>
-			                            @endif
-			                        	@if(!empty($line['sell_line_note']))
-			                        	<br>
-	                        			<span class="f-8">
-			                        	{!!$line['sell_line_note']!!}
-			                        	</span>
-			                        	@endif 
-			                        	@if(!empty($line['lot_number']))<br> {{$line['lot_number_label']}}:  {{$line['lot_number']}} @endif 
-			                        	@if(!empty($line['product_expiry'])), {{$line['product_expiry_label']}}:  {{$line['product_expiry']}} @endif
-
-			                        	@if(!empty($line['variation']))
-			                        		,
-			                        		{{$line['product_variation']}} {{$line['variation']}}
-			                        	@endif
-			                        	@if(!empty($line['warranty_name']))
-			                            	, 
-			                            	<small>
-			                            		{{$line['warranty_name']}}
-			                            	</small>
-			                            @endif
-			                            @if(!empty($line['warranty_exp_date']))
-			                            	<small>
-			                            		- {{@format_date($line['warranty_exp_date'])}}
-			                            	</small>
-			                            @endif
-			                            @if(!empty($line['warranty_description']))
-			                            	<small> {{$line['warranty_description'] ?? ''}}</small>
-			                            @endif
-
-			                            @if($receipt_details->show_base_unit_details && $line['quantity'] && $line['base_unit_multiplier'] !== 1)
-				                            <br><small>
-				                            	1 {{$line['units']}} = {{$line['base_unit_multiplier']}} {{$line['base_unit_name']}} <br> {{$line['quantity']}} x {{$line['base_unit_multiplier']}} = {{$line['orig_quantity']}} {{$line['base_unit_name']}} <br>
-                            					{{$line['base_unit_price']}} x {{$line['orig_quantity']}} = {{$line['line_total']}}
-				                            </small>
-				                            @endif
-	                        		</p>
-	                        	</div>
-	                        	<div style="display:flex; width: 100%;">
-	                        		<p class="text-left width-60 quantity m-0 bw" style="direction: ltr;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-	                        			{{$line['quantity']}} 
-	                        			@if(empty($receipt_details->hide_price))
-	                        			x {{$line['unit_price_before_discount']}}
-	                        			
-	                        			@if(!empty($line['total_line_discount']) && $line['total_line_discount'] != 0)
-	                        				- {{$line['total_line_discount']}}
-	                        			@endif
-	                        			@endif
-	                        		</p>
-	                        		@if(empty($receipt_details->hide_price))
-	                        		<p class="text-right width-40 price m-0 bw">{{$line['line_total']}}</p>
-	                        		@endif
-	                        	</div>
-	                        </td>
-	                    </tr>
-	                    @if(!empty($line['modifiers']))
-							@foreach($line['modifiers'] as $modifier)
-								<tr>
-									<td>
-										<div style="display:flex;">
-	                        				<p style="width: 28px;" class="m-0">
-	                        				</p>
-	                        				<p class="text-left width-60 m-0" style="margin:0;">
-	                        					{{$modifier['name']}} 
-	                        					@if(!empty($modifier['sub_sku'])), {{$modifier['sub_sku']}} @endif @if(!empty($modifier['cat_code'])), {{$modifier['cat_code']}}@endif
-			                            		@if(!empty($modifier['sell_line_note']))({!!$modifier['sell_line_note']!!}) @endif
-	                        				</p>
-	                        				<p class="text-right width-40 m-0">
-	                        					{{$modifier['variation']}}
-	                        				</p>
-	                        			</div>	
-	                        			<div style="display:flex;">
-	                        				<p style="width: 28px;"></p>
-	                        				<p class="text-left width-50 quantity">
-	                        					{{$modifier['quantity']}}
-	                        					@if(empty($receipt_details->hide_price))
-	                        					x {{$modifier['unit_price_inc_tax']}}
-	                        					@endif
-	                        				</p>
-	                        				<p class="text-right width-50 price">
-	                        					{{$modifier['line_total']}}
-	                        				</p>
-	                        			</div>		                             
-			                        </td>
-			                    </tr>
-							@endforeach
-						@endif
-                    @endforeach
-                </tbody>
-            </table>
+	            <table class="width-100 table-f-12 mb-10 receipt-items-legacy">
+	                <tbody>
+	                	@forelse($receipt_details->lines as $line)
+	                		@php
+	                			$line_name = trim($line['name'] ?? '');
+	                			$second_line = trim(
+	                				collect([
+	                					$line['product_variation'] ?? '',
+	                					$line['variation'] ?? '',
+	                				])->filter()->implode(' ')
+	                			);
+	                			if (empty($second_line) && !empty($line['product_description'])) {
+	                				$second_line = trim(strip_tags($line['product_description']));
+	                			}
+	                			if (empty($second_line) && !empty($line['sell_line_note'])) {
+	                				$second_line = trim(strip_tags($line['sell_line_note']));
+	                			}
+	                			$tax_code = '';
+	                			if (isset($line['tax_unformatted']) && (float) $line['tax_unformatted'] == 0.0) {
+	                				$tax_code = 'NT';
+	                			} elseif (!empty($line['tax_name'])) {
+	                				$tax_code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $line['tax_name']));
+	                				$tax_code = substr($tax_code, 0, 4);
+	                			}
+	                		@endphp
+		                    <tr class="receipt-item-heading">
+		                        <td colspan="2">#{{$loop->iteration}}:&nbsp;&nbsp;{{$line_name}}</td>
+		                        <td class="text-right">@if(!empty($tax_code))*{{$tax_code}}@endif</td>
+		                    </tr>
+		                    @if(!empty($second_line))
+		                    	<tr class="receipt-item-second">
+		                    		<td colspan="3">{{$second_line}}</td>
+		                    	</tr>
+		                    @endif
+		                    <tr class="receipt-item-price bb-lg">
+		                    	<td colspan="2">{{$line['quantity']}}{{$line['units']}} x {{$line['unit_price_before_discount']}}</td>
+		                    	<td class="text-right">{{$line['line_total']}}</td>
+		                    </tr>
+	                    @empty
+	                    	<tr>
+	                    		<td colspan="3">&nbsp;</td>
+	                    	</tr>
+	                	@endforelse
+	                </tbody>
+	            </table>
             @if(!empty($receipt_details->total_quantity_label))
 				<div class="flex-box">
 					<p class="left text-left">
@@ -599,15 +540,15 @@
 					({{$receipt_details->total_in_words}})
 					</small>
 				</p>
-			@endif
-			@if(!empty($receipt_details->payments))
-				@foreach($receipt_details->payments as $payment)
-					<div class="flex-box">
-						<p class="width-50 text-left">{{$payment['method']}} ({{$payment['date']}}) </p>
-						<p class="width-50 text-right">{{$payment['amount']}}</p>
-					</div>
-				@endforeach
-			@endif
+				@endif
+				@if(!empty($receipt_details->payments))
+					@foreach($receipt_details->payments as $payment)
+						<div class="flex-box">
+							<p class="width-50 text-left">ชำระเงินโดย: {{$payment['method']}}</p>
+							<p class="width-50 text-right">จำนวนเงิน: {{$payment['amount']}}</p>
+						</div>
+					@endforeach
+				@endif
             <!-- Total Paid-->
 				@if(!empty($receipt_details->total_paid))
 					<div class="flex-box">
@@ -832,5 +773,19 @@ img {
 }
 .bb-lg {
 	border-bottom: 1px solid lightgray;
+}
+.receipt-items-legacy td {
+	padding: 2px 0;
+	vertical-align: top;
+}
+.receipt-items-legacy .receipt-item-heading td {
+	padding-top: 6px;
+}
+.receipt-items-legacy .receipt-item-second td {
+	padding-top: 0;
+	padding-bottom: 2px;
+}
+.receipt-items-legacy .receipt-item-price td {
+	padding-bottom: 6px;
 }
 </style>

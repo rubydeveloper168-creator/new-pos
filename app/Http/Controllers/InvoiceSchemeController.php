@@ -6,6 +6,7 @@ use App\InvoiceLayout;
 use App\InvoiceScheme;
 use Datatables;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class InvoiceSchemeController extends Controller
 {
@@ -88,8 +89,31 @@ class InvoiceSchemeController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $business_id = request()->session()->get('user.business_id');
+        $scheme_max = InvoiceScheme::where('business_id', $business_id)
+            ->select(DB::raw('MAX(COALESCE(start_number, 0) + COALESCE(invoice_count, 0)) as max_number'))
+            ->value('max_number') ?? 0;
+        $invoice_max = 0;
+
+        DB::table('transactions')
+            ->where('business_id', $business_id)
+            ->whereNotNull('invoice_no')
+            ->orderBy('id')
+            ->chunk(1000, function ($transactions) use (&$invoice_max) {
+                foreach ($transactions as $transaction) {
+                    if (preg_match('/(\d+)$/', $transaction->invoice_no, $matches)) {
+                        $number = (int) $matches[1];
+                        if ($number > $invoice_max) {
+                            $invoice_max = $number;
+                        }
+                    }
+                }
+            });
+
+        $start_number = max($scheme_max, $invoice_max);
+
         $number_types = $this->number_types;
-        return view('invoice_scheme.create')->with(compact('number_types'));
+        return view('invoice_scheme.create')->with(compact('number_types', 'start_number'));
     }
 
     /**

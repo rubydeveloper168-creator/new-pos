@@ -33,6 +33,16 @@ class Kernel extends ConsoleKernel
 
         }
 
+        // Bidirectional POS sync — runs every minute in all environments
+        $schedule->command('sync:bidirectional')
+            ->everyMinute()
+            ->withoutOverlapping()
+            ->runInBackground();
+
+        // Customer master sync toggle:
+        // Uncomment the next line if you want the isolated customer master job to run every minute.
+        // $schedule->command('sync:customer-master-bidirectional')->everyMinute()->withoutOverlapping()->runInBackground();
+
         if ($env === 'demo') {
             //IMPORTANT NOTE: This command will delete all business details and create dummy business, run only in demo server.
             $schedule->command('pos:dummyBusiness')

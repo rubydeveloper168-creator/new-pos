@@ -257,6 +257,89 @@
         $('.dt-buttons.btn-group').find('a.btn').removeClass('btn');
 
     });
+
+    // Global Select2 Dropdown Fix - Auto-initialize all select2 with proper settings
+    $(document).ready(function() {
+        // Function to fix a select2 dropdown
+        function fixSelect2Dropdown($select) {
+            if (!$select.length || $select.data('select2-fixed')) return;
+
+            var $formGroup = $select.closest('.form-group');
+            var $modal = $select.closest('.modal');
+            var dropdownParent = $modal.length ? $modal : ($formGroup.length ? $formGroup : $(document.body));
+
+            // Mark as fixed to prevent double initialization
+            $select.data('select2-fixed', true);
+
+            // Destroy existing select2 if exists
+            if ($select.data('select2')) {
+                try {
+                    $select.select2('destroy');
+                } catch(e) {}
+            }
+
+            // Initialize with proper settings
+            $select.select2({
+                dropdownParent: dropdownParent,
+                width: '100%',
+                dropdownAutoWidth: false
+            });
+
+            // Fix dropdown width on open
+            $select.on('select2:open', function() {
+                setTimeout(function() {
+                    var $container = $select.next('.select2-container');
+                    if ($container.length) {
+                        var containerWidth = $container.outerWidth();
+                        dropdownParent.find('.select2-dropdown').last().css({
+                            'width': containerWidth + 'px',
+                            'min-width': containerWidth + 'px',
+                            'max-width': containerWidth + 'px'
+                        });
+                    }
+                }, 0);
+            });
+        }
+
+        // Fix all existing select2 elements (that have class select2 but NOT ajax-based ones)
+        setTimeout(function() {
+            $('select.select2').each(function() {
+                var $select = $(this);
+                // Skip if already has select2 initialized with ajax (like customer search)
+                if ($select.data('select2') && $select.data('select2').options && $select.data('select2').options.options && $select.data('select2').options.options.ajax) {
+                    // For ajax select2, just fix the open event
+                    var $formGroup = $select.closest('.form-group');
+                    $select.off('select2:open.fix').on('select2:open.fix', function() {
+                        setTimeout(function() {
+                            var $container = $select.next('.select2-container');
+                            if ($container.length) {
+                                var containerWidth = $container.outerWidth();
+                                $('.select2-dropdown').last().css({
+                                    'width': containerWidth + 'px',
+                                    'min-width': containerWidth + 'px',
+                                    'max-width': containerWidth + 'px'
+                                });
+                            }
+                        }, 0);
+                    });
+                } else {
+                    fixSelect2Dropdown($select);
+                }
+            });
+        }, 500);
+
+        // Fix select2 in modals when they open
+        $(document).on('shown.bs.modal', '.modal', function() {
+            var $modal = $(this);
+            setTimeout(function() {
+                $modal.find('select.select2').each(function() {
+                    var $select = $(this);
+                    $select.data('select2-fixed', false); // Reset flag for modal
+                    fixSelect2Dropdown($select);
+                });
+            }, 100);
+        });
+    });
 </script>
 
 

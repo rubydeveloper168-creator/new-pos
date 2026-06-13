@@ -66,7 +66,7 @@
                                 <span class="input-group-addon">
                                     <i class="fa fa-info"></i>
                                 </span>
-                                {!! Form::number('start_number', 0, ['class' => 'form-control', 'required', 'min' => 0 ]); !!}
+                                {!! Form::number('start_number', $start_number ?? 0, ['class' => 'form-control', 'required', 'min' => 0 ]); !!}
                             </div>
                         </div>
                     </div>

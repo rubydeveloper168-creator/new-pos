@@ -266,7 +266,7 @@
             <div class="filter-row">
                 <!-- Search -->
                 <div class="filter-group">
-                    <label>🔍 @lang('lang_v1.search')</label>
+                    <label> @lang('lang_v1.search')</label>
                     <div class="enhanced-search-box">
                         <i class="fa fa-search search-icon"></i>
                         <input type="text" id="enhanced_search" class="form-control" placeholder="Search products, SKU, description...">
@@ -275,7 +275,7 @@
                 
                 <!-- Price Range -->
                 <div class="filter-group">
-                    <label>💰 Price Range</label>
+                    <label> Price Range</label>
                     <div class="price-range-inputs">
                         <input type="number" id="min_price_filter" class="form-control" placeholder="Min ฿">
                         <span>-</span>
@@ -285,7 +285,7 @@
                 
                 <!-- Category Filter -->
                 <div class="filter-group">
-                    <label>📂 Category</label>
+                    <label> Category</label>
                     <select id="enhanced_category_filter" class="form-control select2" style="width: 100%;">
                         <option value="">All Categories</option>
                         @foreach($categories as $category_id => $category_name)
@@ -296,7 +296,7 @@
                 
                 <!-- Stock Status -->
                 <div class="filter-group">
-                    <label>📊 Stock Status</label>
+                    <label>Stock Status</label>
                     <select id="stock_status_filter" class="form-control">
                         <option value="">All Products</option>
                         <option value="in_stock">In Stock Only</option>
@@ -1293,7 +1293,7 @@
             if (searchValue) {
                 activeFilters.push({
                     type: 'search',
-                    label: '🔍 Search: "' + searchValue + '"',
+                    label: ' Search: "' + searchValue + '"',
                     value: searchValue
                 });
             }
@@ -1304,7 +1304,7 @@
             if (categoryValue) {
                 activeFilters.push({
                     type: 'category',
-                    label: '📂 Category: ' + categoryText,
+                    label: ' Category: ' + categoryText,
                     value: categoryValue
                 });
             }
@@ -1313,7 +1313,7 @@
             const minPrice = $('#min_price_filter').val();
             const maxPrice = $('#max_price_filter').val();
             if (minPrice || maxPrice) {
-                const priceLabel = '💰 Price: ฿' + (minPrice || '0') + ' - ฿' + (maxPrice || '∞');
+                const priceLabel = ' Price: ฿' + (minPrice || '0') + ' - ฿' + (maxPrice || '∞');
                 activeFilters.push({
                     type: 'price',
                     label: priceLabel,
@@ -1325,13 +1325,13 @@
             const stockStatus = $('#stock_status_filter').val();
             if (stockStatus) {
                 const stockLabels = {
-                    'in_stock': '📊 In Stock Only',
-                    'low_stock': '📊 Low Stock',
-                    'out_of_stock': '📊 Out of Stock'
+                    'in_stock': 'In Stock Only',
+                    'low_stock': 'Low Stock',
+                    'out_of_stock': 'Out of Stock'
                 };
                 activeFilters.push({
                     type: 'stock',
-                    label: stockLabels[stockStatus] || '📊 ' + stockStatus,
+                    label: stockLabels[stockStatus] || '' + stockStatus,
                     value: stockStatus
                 });
             }

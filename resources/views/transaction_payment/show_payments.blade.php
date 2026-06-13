@@ -161,7 +161,11 @@
                 <div class="row">
                     <div class="col-md-12">
                         @if((auth()->user()->can('hms.add_booking_payment') && (in_array($transaction->type, ['hms_booking']))) || (auth()->user()->can('purchase.payments') && (in_array($transaction->type, ['purchase', 'purchase_return']))) || (auth()->user()->can('sell.payments') && (in_array($transaction->type, ['sell', 'sell_return']))) || ((auth()->user()->can('all_expense.access') || auth()->user()->can('view_own_expense')) &&  $transaction->type == 'expense') )
-                            <a href="{{ action([\App\Http\Controllers\TransactionPaymentController::class, 'addPayment'], [$transaction->id]) }}" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary pull-right add_payment_modal no-print"><i class="fa fa-plus" aria-hidden="true"></i> @lang("purchase.add_payment")</a>
+                            <a href="{{ action([\App\Http\Controllers\TransactionPaymentController::class, 'addPayment'], [$transaction->id]) }}" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary pull-right add_payment_modal no-print"
+                            @if($transaction->status == 'draft' && ($transaction->sub_status == 'proforma' || $transaction->document_type == 'proforma'))
+                                data-proforma-id="{{ $transaction->id }}"
+                            @endif
+                            ><i class="fa fa-plus" aria-hidden="true"></i> @lang("purchase.add_payment")</a>
                         @endif
                     </div>
                 </div>
@@ -187,7 +191,7 @@
                               <td>{{ $payment->payment_ref_no }}</td>
                               <td><span class="display_currency" data-currency_symbol="true">{{ $payment->amount }}</span></td>
                               <td>{{ $payment_types[$payment->method] ?? '' }}</td>
-                              <td>@if(!empty($payment->gateway)){{$payment->gateway}} - @endif {{ $payment->note }}</td>
+                              <td>@if(!empty($payment->gateway)){{$payment->gateway}} - @endif {{ strip_tags($payment->note) }}</td>
                               @if($accounts_enabled)
                                 <td>{{$payment->payment_account->name ?? ''}}</td>
                               @endif

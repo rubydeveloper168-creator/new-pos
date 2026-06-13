@@ -70,7 +70,9 @@ $(document).ready(function() {
 
     //Quick add supplier
     $(document).on('click', '.add_new_supplier', function() {
-        $('#supplier_id').select2('close');
+        if ($('#supplier_id').data('select2')) {
+            $('#supplier_id').select2('close');
+        }
         var name = $(this).data('name');
         $('.contact_modal')
             .find('input#name')
