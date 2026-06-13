@@ -25,6 +25,7 @@ use App\Warranty;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use PhpOffice\PhpSpreadsheet\Cell\Hyperlink;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -1090,14 +1091,6 @@ class SellController extends Controller
         $items_start_row = 11;
         $this->appendModalItemsTable($summary_sheet, $sell, $items_start_row);
 
-        $links_sheet = $spreadsheet->createSheet();
-        $links_sheet->setTitle('Image_Links');
-        $this->buildModalImageLinksSheet($links_sheet, $sell);
-
-        $payments_sheet = $spreadsheet->createSheet();
-        $payments_sheet->setTitle('Payments');
-        $this->appendModalPaymentsTable($payments_sheet, $sell, $payment_types, 1);
-
         $spreadsheet->setActiveSheetIndex(0);
 
         $filename = 'invoice_' . $this->sanitizeFilenamePart($invoice_no) . '_' . $document_type . '.xlsx';
@@ -1236,10 +1229,6 @@ class SellController extends Controller
 
         $customer_lines = array_filter([
             $customer_name,
-            $billing_address_text,
-            ! empty($sell->contact->mobile) ? 'Phone: ' . $sell->contact->mobile : '',
-            ! empty($sell->contact->email) ? 'Email: ' . $sell->contact->email : '',
-            ! empty($sell->contact->tax_number) ? 'Tax ID: ' . $sell->contact->tax_number : '',
         ]);
 
         $from_lines = [
@@ -1373,7 +1362,7 @@ class SellController extends Controller
             $sheet->setCellValue('E' . $row_no, $quantity);
             $sheet->setCellValue('F' . $row_no, $unit_name);
 
-            $image_embedded = $this->tryEmbedImage($sheet, $image_url, 'B' . $row_no, 98, 125);
+            $image_embedded = $this->tryEmbedImage($sheet, $image_url, 'B' . $row_no, 98, 125, $image_url);
             if (! $image_embedded) {
                 $sheet->setCellValue('B' . $row_no, 'Image unavailable');
             } else {
@@ -1857,7 +1846,7 @@ class SellController extends Controller
         $this->modalExcelTempImages = [];
     }
 
-    private function tryEmbedImage(Worksheet $sheet, ?string $source, string $coordinate, int $height = 70, ?int $width = null): bool
+    private function tryEmbedImage(Worksheet $sheet, ?string $source, string $coordinate, int $height = 70, ?int $width = null, ?string $hyperlink_url = null): bool
     {
         $local_path = $this->resolveExcelImagePath($source);
         if (empty($local_path) || ! is_file($local_path)) {
@@ -1881,6 +1870,10 @@ class SellController extends Controller
                 $drawing->setWidthAndHeight($width, $height);
             } else {
                 $drawing->setHeight($height);
+            }
+            $normalized_hyperlink = $this->normalizeHyperlinkUrl($hyperlink_url);
+            if (! empty($normalized_hyperlink)) {
+                $drawing->setHyperlink(new Hyperlink($normalized_hyperlink));
             }
             $drawing->setWorksheet($sheet);
 
