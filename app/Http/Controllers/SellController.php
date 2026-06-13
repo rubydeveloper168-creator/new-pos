@@ -1242,10 +1242,17 @@ class SellController extends Controller
             ! empty($sell->contact->tax_number) ? 'Tax ID: ' . $sell->contact->tax_number : '',
         ]);
 
+        $from_lines = [
+            'RUBYSHOP LIMITED PARTNERSHIP',
+            '97/60 Laksi Land Village, Soi Kosum Ruamjai 39',
+            'Don Mueang Subdistrict, Don Mueang District',
+            'Bangkok 10210, Thailand',
+        ];
+
         $sheet->mergeCells('A6:C6');
         $sheet->mergeCells('D6:F6');
-        $sheet->setCellValue('A6', 'BILLING ADDRESS');
-        $sheet->setCellValue('D6', 'SHIPPING ADDRESS');
+        $sheet->setCellValue('A6', 'FROM');
+        $sheet->setCellValue('D6', 'TO');
         $sheet->getStyle('A6:C6')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $red]],
@@ -1259,7 +1266,7 @@ class SellController extends Controller
 
         $sheet->mergeCells('A7:C9');
         $sheet->mergeCells('D7:F9');
-        $sheet->setCellValue('A7', implode("\n", $customer_lines));
+        $sheet->setCellValue('A7', implode("\n", $from_lines));
         $sheet->setCellValue('D7', implode("\n", $customer_lines));
         $sheet->getStyle('A7:C9')->applyFromArray([
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP, 'wrapText' => true],
