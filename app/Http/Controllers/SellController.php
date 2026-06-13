@@ -1361,7 +1361,7 @@ class SellController extends Controller
 
             $sku = (string) ($sell_line->variations->sub_sku ?? '');
             $quantity = (float) ($sell_line->quantity ?? 0);
-            $unit_name = (string) ($sell_line->sub_unit->short_name ?? ($sell_line->product->unit->short_name ?? ''));
+            $unit_name = $this->translateUnitName((string) ($sell_line->sub_unit->short_name ?? ($sell_line->product->unit->short_name ?? '')));
             $unit_price = (float) ($sell_line->unit_price_before_discount ?? 0);
             $amount = $quantity * (float) ($sell_line->unit_price_inc_tax ?? 0);
             $image_url = (string) ($sell_line->product->image_url ?? '');
@@ -1656,6 +1656,35 @@ class SellController extends Controller
             'related_ipay_invoice_no' => ! empty($related_ipay->invoice_no) ? (string) $related_ipay->invoice_no : '',
             'related_vt_invoice_no' => ! empty($related_vt->invoice_no) ? (string) $related_vt->invoice_no : '',
         ];
+    }
+
+    private function translateUnitName(string $unit_name): string
+    {
+        $unit_name = trim($unit_name);
+        $map = [
+            'อัน' => 'Piece',
+            'ชิ้น' => 'Piece',
+            'ชิ้นงาน' => 'Piece',
+            'ตัว' => 'Piece',
+            'แผ่น' => 'Sheet',
+            'เครื่อง' => 'Machine',
+            'ชุด' => 'Set',
+            'กล่อง' => 'Box',
+            'ถุง' => 'Bag',
+            'คู่' => 'Pair',
+            'แพ็ค' => 'Pack',
+            'แพค' => 'Pack',
+            'ม้วน' => 'Roll',
+            'เส้น' => 'Line',
+            'ขวด' => 'Bottle',
+            'กระป๋อง' => 'Can',
+            'กิโลกรัม' => 'Kg',
+            'กรัม' => 'Gram',
+            'ลิตร' => 'Liter',
+            'เมตร' => 'Meter',
+        ];
+
+        return $map[$unit_name] ?? $unit_name;
     }
 
     private function sanitizeFilenamePart(string $value): string
