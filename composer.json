@@ -2,22 +2,41 @@
     "name": "rubyshop/pos-system",
     "type": "project",
     "description": "RubyShop POS System - Ultimate POS Solution",
-    "keywords": ["framework", "laravel", "pos", "point-of-sale"],
+    "keywords": [
+        "framework",
+        "laravel",
+        "pos",
+        "point-of-sale"
+    ],
     "license": "MIT",
     "require": {
         "php": "^7.4|^8.0",
-        "laravel/framework": "^8.0|^9.0",
-        "laravel/ui": "^3.0|^4.0",
-        "laravel/tinker": "^2.5",
+        "aloha/twilio": "^4.0",
+        "arcanedev/log-viewer": "^8.3",
+        "barryvdh/laravel-dompdf": "*",
+        "consoletvs/charts": "^6.9",
+        "knox/pesapal": "^2.2",
+        "laravel/framework": "8.83.29",
         "laravel/passport": "*",
-        "spatie/laravel-permission": "*",
+        "laravel/tinker": "^2.5",
+        "laravel/ui": "^3.0|^4.0",
+        "laravelcollective/html": "*",
+        "maatwebsite/excel": "*",
+        "milon/barcode": "*",
+        "nwidart/laravel-menus": "dev-master",
+        "nwidart/laravel-modules": "^9.0",
+        "php-debugbar/php-debugbar": "^2.0",
+        "pusher/pusher-php-server": "dev-master",
+        "razorpay/razorpay": "^2.9",
+        "rmccue/requests": "^2.0",
+        "setasign/fpdi": "^2.0",
         "spatie/laravel-activitylog": "*",
         "spatie/laravel-backup": "*",
-        "barryvdh/laravel-dompdf": "*",
-        "maatwebsite/excel": "*",
-        "yajra/laravel-datatables-oracle": "*",
-        "laravelcollective/html": "*",
-        "milon/barcode": "*"
+        "spatie/laravel-permission": "*",
+        "srmklive/paypal": "^3.0",
+        "stripe/stripe-php": "^7.0",
+        "unicodeveloper/laravel-paystack": "^1.0",
+        "yajra/laravel-datatables-oracle": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",
@@ -29,7 +48,10 @@
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
-        "sort-packages": true
+        "sort-packages": true,
+        "platform": {
+            "php": "8.0.30"
+        }
     },
     "extra": {
         "laravel": {
