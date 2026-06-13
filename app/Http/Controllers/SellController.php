@@ -45,6 +45,8 @@ class SellController extends Controller
 
     protected $productUtil;
 
+    protected $modalExcelTempImages = [];
+
     /**
      * Constructor
      *
@@ -1106,6 +1108,7 @@ class SellController extends Controller
             $writer = new Xlsx($spreadsheet);
             $writer->save('php://output');
             $spreadsheet->disconnectWorksheets();
+            $this->cleanupModalExcelTempImages();
             unset($spreadsheet);
         }, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1605,9 +1608,79 @@ class SellController extends Controller
         return null;
     }
 
-    private function tryEmbedImage(Worksheet $sheet, ?string $source, string $coordinate, int $height = 70): bool
+    private function resolveExcelImagePath(?string $source): ?string
     {
         $local_path = $this->resolveLocalImagePath($source);
+        if (! empty($local_path)) {
+            return $local_path;
+        }
+
+        return $this->downloadRemoteExcelImage($source);
+    }
+
+    private function downloadRemoteExcelImage(?string $source): ?string
+    {
+        $url = $this->normalizeHyperlinkUrl($source);
+        if (empty($url) || ! $this->isImageSource($url)) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo((string) parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
+        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true)) {
+            $extension = 'img';
+        }
+
+        $temp_path = tempnam(sys_get_temp_dir(), 'quote_excel_img_');
+        if ($temp_path === false) {
+            return null;
+        }
+
+        $target_path = $temp_path . '.' . $extension;
+        @rename($temp_path, $target_path);
+
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 8,
+                'follow_location' => 1,
+                'ignore_errors' => true,
+                'header' => "User-Agent: RubyShopExcelExport/1.0\r\n",
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ]);
+
+        $image_contents = @file_get_contents($url, false, $context);
+        if ($image_contents === false || strlen($image_contents) < 32) {
+            @unlink($target_path);
+            return null;
+        }
+
+        file_put_contents($target_path, $image_contents);
+        if (@getimagesize($target_path) === false) {
+            @unlink($target_path);
+            return null;
+        }
+
+        $this->modalExcelTempImages[] = $target_path;
+        return $target_path;
+    }
+
+    private function cleanupModalExcelTempImages(): void
+    {
+        foreach ($this->modalExcelTempImages as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+
+        $this->modalExcelTempImages = [];
+    }
+
+    private function tryEmbedImage(Worksheet $sheet, ?string $source, string $coordinate, int $height = 70): bool
+    {
+        $local_path = $this->resolveExcelImagePath($source);
         if (empty($local_path) || ! is_file($local_path)) {
             return false;
         }
