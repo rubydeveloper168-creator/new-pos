@@ -1386,59 +1386,8 @@ class SellController extends Controller
             $row_no++;
         }
 
-        $total_paid = 0.0;
-        foreach ($sell->payment_lines as $payment_line) {
-            $total_paid += ((int) $payment_line->is_return === 1 ? -1 : 1) * (float) $payment_line->amount;
-        }
-        $tax_total = (float) ($sell->tax_amount ?? 0);
-        $shipping = (float) ($sell->shipping_charges ?? 0);
-        $grand_total = (float) ($sell->final_total ?? 0);
-        $balance = $grand_total - $total_paid;
-
-        $notes_start = $row_no + 1;
-        $sheet->mergeCells('A' . $notes_start . ':C' . ($notes_start + 5));
-        $sheet->setCellValue('A' . $notes_start, trim("THANK YOU FOR YOUR BUSINESS!\n\n" . strip_tags((string) ($sell->additional_notes ?? ''))));
-        $sheet->getStyle('A' . $notes_start . ':C' . ($notes_start + 5))->applyFromArray([
-            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP, 'wrapText' => true],
-            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => $border]]],
-        ]);
-        $sheet->getStyle('A' . $notes_start)->getFont()->setBold(true)->setItalic(true);
-
-        $totals = [
-            ['Subtotal', $subtotal],
-            ['Tax', $tax_total],
-            ['Shipping Charges', $shipping],
-            ['Grand Total', $grand_total],
-            ['Paid', $total_paid],
-            ['Balance Due', $balance],
-        ];
-
-        $total_row = $notes_start;
-        foreach ($totals as $index => $entry) {
-            $sheet->mergeCells('D' . $total_row . ':E' . $total_row);
-            $sheet->setCellValue('D' . $total_row, $entry[0]);
-            $sheet->setCellValue('F' . $total_row, $entry[1]);
-            $is_emphasis = in_array($entry[0], ['Grand Total', 'Balance Due'], true);
-            $sheet->getStyle('D' . $total_row . ':F' . $total_row)->applyFromArray([
-                'font' => ['bold' => true, 'color' => ['argb' => $is_emphasis ? 'FFFFFFFF' : 'FF1F2933']],
-                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $is_emphasis ? $red : $light_red]],
-                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => $border]]],
-                'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT],
-            ]);
-            $sheet->getStyle('F' . $total_row)->getNumberFormat()->setFormatCode('#,##0.00');
-            $total_row++;
-        }
-
-        $signature_row = $total_row + 2;
-        $sheet->mergeCells('D' . $signature_row . ':F' . $signature_row);
-        $sheet->setCellValue('D' . $signature_row, 'Authorized Signature');
-        $sheet->getStyle('D' . $signature_row . ':F' . $signature_row)->applyFromArray([
-            'font' => ['bold' => true],
-            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
-            'borders' => ['top' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => 'FF000000']]],
-        ]);
-
-        $sheet->getStyle('A1:F' . $signature_row)->applyFromArray([
+        $last_row = max($start_row, $row_no - 1);
+        $sheet->getStyle('A1:F' . $last_row)->applyFromArray([
             'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF000000']]],
         ]);
     }
