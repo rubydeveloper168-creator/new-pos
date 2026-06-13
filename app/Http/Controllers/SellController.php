@@ -1087,14 +1087,16 @@ class SellController extends Controller
         $summary_sheet = $spreadsheet->getActiveSheet();
         $summary_sheet->setTitle('Summary_Items');
         $this->buildModalSummarySheet($summary_sheet, $sell, $order_taxes, $payment_types, $business_details, $context, $document_type);
-        $items_start_row = $summary_sheet->getHighestRow() + 3;
-        $summary_sheet->setCellValue('B' . ($items_start_row - 1), 'Items');
-        $summary_sheet->getStyle('B' . ($items_start_row - 1))->getFont()->setBold(true)->setSize(12);
+        $items_start_row = 11;
         $this->appendModalItemsTable($summary_sheet, $sell, $items_start_row);
-        $payments_start_row = $summary_sheet->getHighestRow() + 3;
-        $summary_sheet->setCellValue('B' . ($payments_start_row - 1), 'Payments');
-        $summary_sheet->getStyle('B' . ($payments_start_row - 1))->getFont()->setBold(true)->setSize(12);
-        $this->appendModalPaymentsTable($summary_sheet, $sell, $payment_types, $payments_start_row);
+
+        $links_sheet = $spreadsheet->createSheet();
+        $links_sheet->setTitle('Image_Links');
+        $this->buildModalImageLinksSheet($links_sheet, $sell);
+
+        $payments_sheet = $spreadsheet->createSheet();
+        $payments_sheet->setTitle('Payments');
+        $this->appendModalPaymentsTable($payments_sheet, $sell, $payment_types, 1);
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -1126,26 +1128,93 @@ class SellController extends Controller
         array $context,
         string $document_type
     ): void {
-        // Keep column A narrow for item numbering section below; summary uses B-I.
-        $sheet->getColumnDimension('A')->setWidth(6);
-        $sheet->getColumnDimension('B')->setWidth(22);
-        $sheet->getColumnDimension('C')->setWidth(26);
-        $sheet->getColumnDimension('D')->setWidth(22);
-        $sheet->getColumnDimension('E')->setWidth(26);
-        $sheet->getColumnDimension('F')->setWidth(22);
-        $sheet->getColumnDimension('G')->setWidth(26);
-        $sheet->getColumnDimension('H')->setWidth(22);
-        $sheet->getColumnDimension('I')->setWidth(26);
+        $red = 'FFFF2D2D';
+        $dark_red = 'FFB91C1C';
+        $light_red = 'FFFFE9E9';
+        $border = 'FF7F1D1D';
+        $dark_text = 'FF1F2933';
 
-        $sheet->mergeCells('B1:I1');
-        $sheet->setCellValue('B1', 'Summary Sales Modal Export');
-        $sheet->getStyle('B1')->getFont()->setBold(true)->setSize(14);
+        $sheet->setShowGridlines(false);
+        $sheet->freezePane(null);
+        $sheet->getPageSetup()
+            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+            ->setFitToWidth(1)
+            ->setFitToHeight(0);
+        $sheet->getPageMargins()->setTop(0.35)->setRight(0.25)->setLeft(0.25)->setBottom(0.35);
+
+        $column_widths = [
+            'A' => 6,
+            'B' => 20,
+            'C' => 52,
+            'D' => 16,
+            'E' => 10,
+            'F' => 12,
+        ];
+        foreach ($column_widths as $column => $width) {
+            $sheet->getColumnDimension($column)->setWidth($width);
+        }
+
+        $sheet->getDefaultRowDimension()->setRowHeight(19);
+        $sheet->getStyle('A1:F80')->getFont()->setName('Arial')->setSize(10)->getColor()->setARGB($dark_text);
+
+        $sheet->mergeCells('A1:B2');
+        $logo_embedded = $this->tryEmbedImage($sheet, 'https://www.rubyshop.co.th/storage/logo/rubyshop-no-bg-white-footer-1.png', 'A1', 42, 150);
+        if (! $logo_embedded) {
+            $sheet->setCellValue('A1', strtoupper((string) ($business_details->name ?? 'RUBYSHOP')));
+        }
+        $sheet->getStyle('A1:B2')->applyFromArray([
+            'font' => ['bold' => true, 'size' => 18, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $red]],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => $border]]],
+        ]);
+
+        $sheet->mergeCells('C1:F2');
+        $sheet->setCellValue('C1', strtoupper((string) ($context['doc_type_en'] ?? 'QUOTATION')));
+        $sheet->getStyle('C1:F2')->applyFromArray([
+            'font' => ['bold' => true, 'size' => 18, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $red]],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => $border]]],
+        ]);
+
+        $company_lines = array_filter([
+            strtoupper((string) ($business_details->name ?? '')),
+            ! empty($business_details->tax_number) ? 'Tax ID: ' . $business_details->tax_number : '',
+            implode(', ', array_filter([
+                $business_details->landmark ?? '',
+                $business_details->city ?? '',
+                $business_details->state ?? '',
+                $business_details->country ?? '',
+                $business_details->zip_code ?? '',
+            ])),
+            ! empty($business_details->mobile) ? 'Phone: ' . $business_details->mobile : '',
+            ! empty($business_details->email) ? 'Email: ' . $business_details->email : '',
+        ]);
+
+        $sheet->mergeCells('A3:C3');
+        $sheet->mergeCells('D3:F3');
+        $sheet->mergeCells('A4:C4');
+        $sheet->mergeCells('D4:F4');
+        $sheet->setCellValue('A3', 'QUOTATION NO.');
+        $sheet->setCellValue('D3', 'DATE');
+        $sheet->setCellValue('A4', (string) ($sell->invoice_no ?? ''));
+        $sheet->setCellValue('D4', $this->transactionUtil->format_date($sell->transaction_date, true));
+        $sheet->getStyle('A3:F3')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $red]],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => $border]]],
+        ]);
+        $sheet->getStyle('A4:F4')->applyFromArray([
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => $border]]],
+        ]);
 
         $total_paid = 0.0;
         foreach ($sell->payment_lines as $payment_line) {
             $total_paid += ((int) $payment_line->is_return === 1 ? -1 : 1) * (float) $payment_line->amount;
         }
-        $total_remaining = (float) $sell->final_total - $total_paid;
 
         $billing_address_text = '';
         $billing_address = $sell->billing_address(true);
@@ -1165,122 +1234,88 @@ class SellController extends Controller
             }
         }
 
-        $payment_method_list = [];
-        foreach ($sell->payment_lines as $payment_line) {
-            $method_key = (string) ($payment_line->method ?? '');
-            if ($method_key !== '') {
-                $payment_method_list[] = $payment_types[$method_key] ?? $method_key;
-            }
-        }
-        $payment_method_list = array_values(array_unique($payment_method_list));
-
-        $company_lines = array_filter([
-            $business_details->name ?? '',
-            ! empty($business_details->tax_number) ? 'Tax ID: ' . $business_details->tax_number : '',
-            implode(', ', array_filter([
-                $business_details->landmark ?? '',
-                $business_details->city ?? '',
-                $business_details->state ?? '',
-                $business_details->country ?? '',
-                $business_details->zip_code ?? '',
-            ])),
-            ! empty($business_details->mobile) ? 'Phone: ' . $business_details->mobile : '',
-            ! empty($business_details->alternate_number) ? 'Alt Phone: ' . $business_details->alternate_number : '',
-            ! empty($business_details->email) ? 'Email: ' . $business_details->email : '',
+        $customer_lines = array_filter([
+            $customer_name,
+            $billing_address_text,
+            ! empty($sell->contact->mobile) ? 'Phone: ' . $sell->contact->mobile : '',
+            ! empty($sell->contact->email) ? 'Email: ' . $sell->contact->email : '',
+            ! empty($sell->contact->tax_number) ? 'Tax ID: ' . $sell->contact->tax_number : '',
         ]);
 
-        $rows = [
-            ['Invoice No', (string) ($sell->invoice_no ?? '')],
-            ['Transaction Date', $this->transactionUtil->format_date($sell->transaction_date, true)],
-            ['Document Label', (string) ($context['doc_type_label'] ?? '')],
-            ['Document Label (EN)', (string) ($context['doc_type_en'] ?? '')],
-            ['Sell Status', (string) ($context['status_label'] ?? '')],
-            ['Payment Status', (string) ($context['payment_status_label'] ?? '')],
-            ['Payment Methods', implode(', ', $payment_method_list)],
-            ['Related Tax-Invoice No', (string) ($context['related_vt_invoice_no'] ?? '')],
-            ['Related Billing-Receive No', (string) ($context['related_ipay_invoice_no'] ?? '')],
-            ['Customer', $customer_name],
-            ['Customer Tax ID', (string) ($sell->contact->tax_number ?? '')],
-            ['Customer Phone', (string) ($sell->contact->mobile ?? '')],
-            ['Customer Email', (string) ($sell->contact->email ?? '')],
-            ['Customer Address', $billing_address_text],
-            ['Company Details', implode("\n", $company_lines)],
-            ['Total Before Tax', (float) ($sell->total_before_tax ?? 0)],
-        ];
+        $sheet->mergeCells('A6:C6');
+        $sheet->mergeCells('D6:F6');
+        $sheet->setCellValue('A6', 'BILLING ADDRESS');
+        $sheet->setCellValue('D6', 'SHIPPING ADDRESS');
+        $sheet->getStyle('A6:C6')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $red]],
+            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => $border]]],
+        ]);
+        $sheet->getStyle('D6:F6')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $red]],
+            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => $border]]],
+        ]);
 
-        foreach ($order_taxes as $tax_name => $tax_value) {
-            $rows[] = ['Tax - ' . $tax_name, (float) $tax_value];
+        $sheet->mergeCells('A7:C9');
+        $sheet->mergeCells('D7:F9');
+        $sheet->setCellValue('A7', implode("\n", $customer_lines));
+        $sheet->setCellValue('D7', implode("\n", $customer_lines));
+        $sheet->getStyle('A7:C9')->applyFromArray([
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP, 'wrapText' => true],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFFFFF']],
+            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => $border]]],
+        ]);
+        $sheet->getStyle('D7:F9')->applyFromArray([
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP, 'wrapText' => true],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFFFFF']],
+            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => $border]]],
+        ]);
+
+        if (! empty($context['related_vt_invoice_no']) || ! empty($context['related_ipay_invoice_no'])) {
+            $sheet->mergeCells('A13:B13');
+            $sheet->mergeCells('D13:E13');
+            $sheet->setCellValue('A13', 'RELATED TAX-INVOICE');
+            $sheet->setCellValue('C13', (string) ($context['related_vt_invoice_no'] ?? ''));
+            $sheet->setCellValue('D13', 'RELATED BILLING-RECEIVE');
+            $sheet->setCellValue('F13', (string) ($context['related_ipay_invoice_no'] ?? ''));
+            $sheet->getStyle('A13:F13')->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => $border]]],
+            ]);
+            $sheet->getStyle('A13:B13')->getFont()->setBold(true);
+            $sheet->getStyle('D13:E13')->getFont()->setBold(true);
         }
-
-        $rows[] = ['Shipping Charges', (float) ($sell->shipping_charges ?? 0)];
-        $rows[] = ['Final Total', (float) ($sell->final_total ?? 0)];
-        $rows[] = ['Total Paid', $total_paid];
-        $rows[] = ['Total Remaining', $total_remaining];
-        $rows[] = ['Additional Notes', (string) ($sell->additional_notes ?? '')];
-        $rows[] = ['Staff Note', (string) ($sell->staff_note ?? '')];
-
-        array_unshift(
-            $rows,
-            ['Generated At', date('Y-m-d H:i:s')],
-            ['Document Type Request', $document_type]
-        );
-
-        $pair_slots = [
-            ['B', 'C'],
-            ['D', 'E'],
-            ['F', 'G'],
-            ['H', 'I'],
-        ];
-
-        $row_no = 2;
-        $slot_index = 0;
-        foreach ($rows as $entry) {
-            $label_col = $pair_slots[$slot_index][0];
-            $value_col = $pair_slots[$slot_index][1];
-            $sheet->setCellValue($label_col . $row_no, $entry[0]);
-            $sheet->setCellValue($value_col . $row_no, $entry[1]);
-
-            $slot_index++;
-            if ($slot_index >= count($pair_slots)) {
-                $slot_index = 0;
-                $row_no++;
-            }
-        }
-
-        if ($slot_index !== 0) {
-            $row_no++;
-        }
-
-        $last_data_row = $row_no - 1;
-        $sheet->getStyle('B2:B' . $last_data_row)->getFont()->setBold(true);
-        $sheet->getStyle('D2:D' . $last_data_row)->getFont()->setBold(true);
-        $sheet->getStyle('F2:F' . $last_data_row)->getFont()->setBold(true);
-        $sheet->getStyle('H2:H' . $last_data_row)->getFont()->setBold(true);
-        $sheet->getStyle('C2:I' . $last_data_row)->getAlignment()->setWrapText(true);
     }
 
     private function appendModalItemsTable(Worksheet $sheet, Transaction $sell, int $start_row): void
     {
-        $headers = ['#', 'Description', 'SKU', 'Qty', 'Unit', 'Unit Price', 'Amount', 'Product Image', 'Image URL'];
-        $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+        $red = 'FFFF2D2D';
+        $dark_red = 'FFB91C1C';
+        $light_red = 'FFFFEFEF';
+        $border = 'FF9F1D1D';
+
+        $headers = ['#', 'Product Image', 'Description', 'SKU', 'Qty', 'Unit'];
+        $columns = ['A', 'B', 'C', 'D', 'E', 'F'];
 
         foreach ($headers as $index => $header) {
             $sheet->setCellValue($columns[$index] . $start_row, $header);
         }
 
-        $sheet->getStyle('A' . $start_row . ':I' . $start_row)->getFont()->setBold(true);
-        $sheet->getStyle('B:I')->getAlignment()->setWrapText(true);
+        $sheet->getStyle('A' . $start_row . ':F' . $start_row)->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $red]],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER, 'wrapText' => true],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => $border]]],
+        ]);
+        $sheet->getStyle('B:F')->getAlignment()->setWrapText(true);
 
         $item_column_widths = [
             'A' => 6,
-            'B' => 42,
-            'C' => 18,
-            'D' => 10,
+            'B' => 20,
+            'C' => 52,
+            'D' => 16,
             'E' => 10,
-            'F' => 14,
-            'G' => 14,
-            'H' => 18,
-            'I' => 45,
+            'F' => 10,
         ];
         foreach ($item_column_widths as $column => $width) {
             $current_width = (float) $sheet->getColumnDimension($column)->getWidth();
@@ -1290,10 +1325,14 @@ class SellController extends Controller
         }
 
         $row_no = $start_row + 1;
+        $subtotal = 0.0;
         foreach ($sell->sell_lines as $index => $sell_line) {
             $description = '';
             if (! empty($sell_line->product)) {
-                $description = (string) $sell_line->product->name;
+                $description = trim((string) ($sell_line->product->second_name ?? ''));
+                if ($description === '') {
+                    $description = (string) $sell_line->product->name;
+                }
                 $variation_parts = [];
                 $product_variation_name = (string) ($sell_line->variations->product_variation->name ?? '');
                 $variation_name = (string) ($sell_line->variations->name ?? '');
@@ -1319,29 +1358,126 @@ class SellController extends Controller
             $unit_price = (float) ($sell_line->unit_price_before_discount ?? 0);
             $amount = $quantity * (float) ($sell_line->unit_price_inc_tax ?? 0);
             $image_url = (string) ($sell_line->product->image_url ?? '');
+            $subtotal += $quantity * $unit_price;
 
             $sheet->setCellValue('A' . $row_no, $index + 1);
-            $sheet->setCellValue('B' . $row_no, $description);
-            $sheet->setCellValue('C' . $row_no, $sku);
-            $sheet->setCellValue('D' . $row_no, $quantity);
-            $sheet->setCellValue('E' . $row_no, $unit_name);
-            $sheet->setCellValue('F' . $row_no, $unit_price);
-            $sheet->setCellValue('G' . $row_no, $amount);
-            $sheet->setCellValue('I' . $row_no, $image_url);
-            $this->applyClickableHyperlink($sheet, 'I' . $row_no, $image_url);
+            $sheet->setCellValue('C' . $row_no, $description);
+            $sheet->setCellValue('D' . $row_no, $sku);
+            $sheet->setCellValue('E' . $row_no, $quantity);
+            $sheet->setCellValue('F' . $row_no, $unit_name);
 
-            $image_embedded = $this->tryEmbedImage($sheet, $image_url, 'H' . $row_no);
+            $image_embedded = $this->tryEmbedImage($sheet, $image_url, 'B' . $row_no, 98, 125);
             if (! $image_embedded) {
-                $sheet->setCellValue('H' . $row_no, 'Image unavailable');
+                $sheet->setCellValue('B' . $row_no, 'Image unavailable');
             } else {
-                $sheet->getRowDimension($row_no)->setRowHeight(80);
+                $sheet->getRowDimension($row_no)->setRowHeight(102);
             }
+
+            $sheet->getStyle('A' . $row_no . ':F' . $row_no)->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => $border]]],
+                'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER, 'wrapText' => true],
+            ]);
+            $sheet->getStyle('A' . $row_no)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('D' . $row_no . ':F' . $row_no)->getAlignment()
+                ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER)
+                ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
 
             $row_no++;
         }
 
         if ($row_no === $start_row + 1) {
             $sheet->setCellValue('A' . ($start_row + 1), 'No item rows found');
+            $row_no++;
+        }
+
+        $total_paid = 0.0;
+        foreach ($sell->payment_lines as $payment_line) {
+            $total_paid += ((int) $payment_line->is_return === 1 ? -1 : 1) * (float) $payment_line->amount;
+        }
+        $tax_total = (float) ($sell->tax_amount ?? 0);
+        $shipping = (float) ($sell->shipping_charges ?? 0);
+        $grand_total = (float) ($sell->final_total ?? 0);
+        $balance = $grand_total - $total_paid;
+
+        $notes_start = $row_no + 1;
+        $sheet->mergeCells('A' . $notes_start . ':C' . ($notes_start + 5));
+        $sheet->setCellValue('A' . $notes_start, trim("THANK YOU FOR YOUR BUSINESS!\n\n" . strip_tags((string) ($sell->additional_notes ?? ''))));
+        $sheet->getStyle('A' . $notes_start . ':C' . ($notes_start + 5))->applyFromArray([
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP, 'wrapText' => true],
+            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => $border]]],
+        ]);
+        $sheet->getStyle('A' . $notes_start)->getFont()->setBold(true)->setItalic(true);
+
+        $totals = [
+            ['Subtotal', $subtotal],
+            ['Tax', $tax_total],
+            ['Shipping Charges', $shipping],
+            ['Grand Total', $grand_total],
+            ['Paid', $total_paid],
+            ['Balance Due', $balance],
+        ];
+
+        $total_row = $notes_start;
+        foreach ($totals as $index => $entry) {
+            $sheet->mergeCells('D' . $total_row . ':E' . $total_row);
+            $sheet->setCellValue('D' . $total_row, $entry[0]);
+            $sheet->setCellValue('F' . $total_row, $entry[1]);
+            $is_emphasis = in_array($entry[0], ['Grand Total', 'Balance Due'], true);
+            $sheet->getStyle('D' . $total_row . ':F' . $total_row)->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['argb' => $is_emphasis ? 'FFFFFFFF' : 'FF1F2933']],
+                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => $is_emphasis ? $red : $light_red]],
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => $border]]],
+                'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT],
+            ]);
+            $sheet->getStyle('F' . $total_row)->getNumberFormat()->setFormatCode('#,##0.00');
+            $total_row++;
+        }
+
+        $signature_row = $total_row + 2;
+        $sheet->mergeCells('D' . $signature_row . ':F' . $signature_row);
+        $sheet->setCellValue('D' . $signature_row, 'Authorized Signature');
+        $sheet->getStyle('D' . $signature_row . ':F' . $signature_row)->applyFromArray([
+            'font' => ['bold' => true],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+            'borders' => ['top' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['argb' => 'FF000000']]],
+        ]);
+
+        $sheet->getStyle('A1:F' . $signature_row)->applyFromArray([
+            'borders' => ['outline' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['argb' => 'FF000000']]],
+        ]);
+    }
+
+    private function buildModalImageLinksSheet(Worksheet $sheet, Transaction $sell): void
+    {
+        $sheet->setShowGridlines(false);
+        $headers = ['#', 'Description', 'SKU', 'Raw Image URL'];
+        $columns = ['A', 'B', 'C', 'D'];
+
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue($columns[$index] . '1', $header);
+        }
+
+        $sheet->getColumnDimension('A')->setWidth(6);
+        $sheet->getColumnDimension('B')->setWidth(48);
+        $sheet->getColumnDimension('C')->setWidth(18);
+        $sheet->getColumnDimension('D')->setWidth(90);
+        $sheet->getStyle('A1:D1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFF2D2D']],
+        ]);
+        $sheet->getStyle('A:D')->getAlignment()->setWrapText(true);
+
+        $row_no = 2;
+        foreach ($sell->sell_lines as $index => $sell_line) {
+            $description = (string) ($sell_line->product->name ?? 'Product Label (Missing)');
+            $sku = (string) ($sell_line->variations->sub_sku ?? '');
+            $image_url = (string) ($sell_line->product->image_url ?? '');
+
+            $sheet->setCellValue('A' . $row_no, $index + 1);
+            $sheet->setCellValue('B' . $row_no, $description);
+            $sheet->setCellValue('C' . $row_no, $sku);
+            $sheet->setCellValue('D' . $row_no, $image_url);
+            $row_no++;
         }
     }
 
@@ -1403,6 +1539,13 @@ class SellController extends Controller
         if ($row_no === $start_row + 1) {
             $sheet->setCellValue('A' . ($start_row + 1), 'No payment rows found');
         }
+    }
+
+    private function getModalPaymentsStartRow(Transaction $sell, int $items_start_row): int
+    {
+        $item_rows = max(1, $sell->sell_lines->count());
+
+        return $items_start_row + $item_rows + 14;
     }
 
     private function resolveModalDocumentContext(Transaction $sell): array
@@ -1678,7 +1821,7 @@ class SellController extends Controller
         $this->modalExcelTempImages = [];
     }
 
-    private function tryEmbedImage(Worksheet $sheet, ?string $source, string $coordinate, int $height = 70): bool
+    private function tryEmbedImage(Worksheet $sheet, ?string $source, string $coordinate, int $height = 70, ?int $width = null): bool
     {
         $local_path = $this->resolveExcelImagePath($source);
         if (empty($local_path) || ! is_file($local_path)) {
@@ -1695,9 +1838,14 @@ class SellController extends Controller
             $drawing->setDescription(basename($local_path));
             $drawing->setPath($local_path, true);
             $drawing->setCoordinates($coordinate);
-            $drawing->setOffsetX(4);
-            $drawing->setOffsetY(4);
-            $drawing->setHeight($height);
+            $drawing->setOffsetX(1);
+            $drawing->setOffsetY(1);
+            if (! empty($width)) {
+                $drawing->setResizeProportional(true);
+                $drawing->setWidthAndHeight($width, $height);
+            } else {
+                $drawing->setHeight($height);
+            }
             $drawing->setWorksheet($sheet);
 
             return true;
