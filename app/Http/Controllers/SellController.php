@@ -2899,7 +2899,7 @@ class SellController extends Controller
                 $sells->where('transactions.created_by', request()->session()->get('user.id'));
             }
 
-            $sells->addSelect('transactions.is_direct_sale', 'transactions.res_table_id', 'transactions.res_waiter_id', 'transactions.additional_notes', 'transactions.linked_billing_receive_id');
+            $sells->addSelect('transactions.res_table_id', 'transactions.res_waiter_id', 'transactions.additional_notes', 'transactions.linked_billing_receive_id');
             $sells->addSelect(DB::raw('SUM((tsl.quantity - tsl.quantity_returned) * tsl.item_tax) as line_tax_total'));
             $sells->addSelect(DB::raw('SUM((tsl.quantity - tsl.quantity_returned) * (tsl.unit_price_inc_tax - tsl.unit_price)) as calc_line_tax_total'));
 
