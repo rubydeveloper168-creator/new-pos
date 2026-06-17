@@ -1,6 +1,131 @@
 var global_brand_id = null;
 var global_p_category_id = null;
+var pos_receipt_html_cache = '';
+var pos_receipt_print_title_cache = '';
+var pos_last_whatsapp_link = '';
 $(document).ready(function() {
+    function isPosRouteForReceiptPreviewModal() {
+        var pathname = window.location.pathname || '';
+        var segments = pathname.split('/').filter(function(segment) {
+            return segment !== '';
+        });
+        return segments.indexOf('pos') !== -1;
+    }
+
+    function normalizeReceiptHtmlForModal(htmlContent) {
+        var html = String(htmlContent || '');
+        var bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        var styles = html.match(/<style[\s\S]*?<\/style>/gi);
+        var extractedStyles = styles ? styles.join('') : '';
+
+        if (bodyMatch && bodyMatch[1]) {
+            return extractedStyles + bodyMatch[1];
+        }
+
+        return html;
+    }
+
+    function ensurePosReceiptPreviewModal() {
+        if ($('#pos_receipt_preview_modal').length) {
+            return;
+        }
+
+        var modalHtml = '' +
+            '<div class="modal fade no-print" id="pos_receipt_preview_modal" tabindex="-1" role="dialog" aria-hidden="true">' +
+                '<div class="modal-dialog" role="document" style="max-width: 520px; margin-top: 12px;">' +
+                    '<div class="modal-content pos-receipt-preview-content">' +
+                        '<div class="modal-header pos-receipt-preview-header">' +
+                            '<button type="button" class="close" data-dismiss="modal" aria-label="Close">' +
+                                '<span aria-hidden="true">&times;</span>' +
+                            '</button>' +
+                        '</div>' +
+                        '<div class="modal-body pos-receipt-preview-body">' +
+                            '<div id="pos_receipt_preview_body"></div>' +
+                        '</div>' +
+                        '<div class="modal-footer pos-receipt-preview-footer">' +
+                            '<button type="button" class="btn pos-receipt-btn pos-receipt-btn-print" id="pos_receipt_modal_print">พิมพ์</button>' +
+                            '<button type="button" class="btn pos-receipt-btn pos-receipt-btn-email" id="pos_receipt_modal_email">อีเมล์</button>' +
+                            '<button type="button" class="btn pos-receipt-btn pos-receipt-btn-close" data-dismiss="modal">ปิด</button>' +
+                        '</div>' +
+                        '<div class="pos-receipt-print-note">' +
+                            '<div><strong>PLEASE DON\'T FORGET TO DISABLE THE HEADER AND FOOTER IN BROWSER PRINT SETTINGS. YOU CAN SET ZOOM/SCALE AS YOU NEED.</strong></div>' +
+                            '<div><strong>FF:</strong> File > Print Setup > Margin &amp; Header/Footer Make All --Blank--</div>' +
+                            '<div><strong>Chrome:</strong> Menu > Print > Disable Header/Footer In Option &amp; Set Margins To None</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        $('body').append(modalHtml);
+
+        var styleHtml = '' +
+            '<style id="pos_receipt_preview_modal_style">' +
+                '#pos_receipt_preview_modal .pos-receipt-preview-content { background: #ebebeb; border: 1px solid #d5d5d5; border-radius: 0; }' +
+                '#pos_receipt_preview_modal .pos-receipt-preview-header { border-bottom: 0; padding: 8px 12px; min-height: 34px; }' +
+                '#pos_receipt_preview_modal .pos-receipt-preview-body { padding: 0 8px 8px; max-height: 70vh; overflow-y: auto; }' +
+                '#pos_receipt_preview_modal #pos_receipt_preview_body { background: #fff; padding: 8px; border: 1px solid #d8d8d8; }' +
+                '#pos_receipt_preview_modal .pos-receipt-preview-footer { border-top: 1px solid #d3d3d3; padding: 0; margin: 0; display: flex; }' +
+                '#pos_receipt_preview_modal .pos-receipt-btn { flex: 1; margin: 0; border-radius: 0; border: 0; color: #fff; font-weight: 600; min-height: 36px; }' +
+                '#pos_receipt_preview_modal .pos-receipt-btn-print { background: #2f7ec1; }' +
+                '#pos_receipt_preview_modal .pos-receipt-btn-email { background: #5cb85c; border-left: 1px solid rgba(255,255,255,.25); border-right: 1px solid rgba(255,255,255,.25); }' +
+                '#pos_receipt_preview_modal .pos-receipt-btn-close { background: #9ea3a8; }' +
+                '#pos_receipt_preview_modal .pos-receipt-btn-email.disabled, #pos_receipt_preview_modal .pos-receipt-btn-email:disabled { background: #b7c4b7; cursor: not-allowed; opacity: .9; }' +
+                '#pos_receipt_preview_modal .pos-receipt-print-note { padding: 10px 12px 12px; font-size: 12px; color: #3e3e3e; background: #efefef; border-top: 1px solid #d3d3d3; line-height: 1.4; }' +
+            '</style>';
+        $('head').append(styleHtml);
+
+        $(document).on('click', '#pos_receipt_modal_print', function() {
+            if (!pos_receipt_html_cache) {
+                return;
+            }
+
+            var originalTitle = document.title;
+            if (pos_receipt_print_title_cache) {
+                document.title = pos_receipt_print_title_cache;
+            }
+
+            $('#receipt_section').html(pos_receipt_html_cache);
+            __currency_convert_recursively($('#receipt_section'));
+            __print_receipt('receipt_section');
+
+            setTimeout(function() {
+                document.title = originalTitle;
+            }, 1200);
+        });
+
+        $(document).on('click', '#pos_receipt_modal_email', function() {
+            if (!pos_last_whatsapp_link) {
+                toastr.warning('No email/notification link available for this receipt.');
+                return;
+            }
+
+            window.open(pos_last_whatsapp_link, '_blank');
+        });
+    }
+
+    function updatePosReceiptEmailButtonState() {
+        var hasLink = !!pos_last_whatsapp_link;
+        $('#pos_receipt_modal_email')
+            .prop('disabled', !hasLink)
+            .toggleClass('disabled', !hasLink);
+    }
+
+    function showPosReceiptPreviewModal(receipt) {
+        ensurePosReceiptPreviewModal();
+
+        var normalizedHtml = normalizeReceiptHtmlForModal(receipt.html_content);
+        pos_receipt_html_cache = normalizedHtml;
+        pos_receipt_print_title_cache = receipt.print_title || '';
+
+        $('#pos_receipt_preview_body').html(normalizedHtml);
+        __currency_convert_recursively($('#pos_receipt_preview_body'));
+        updatePosReceiptEmailButtonState();
+        $('#pos_receipt_preview_modal').modal('show');
+    }
+
+    // Expose helpers for pos_print(), which is declared outside document.ready scope.
+    window.isPosRouteForReceiptPreviewModal = isPosRouteForReceiptPreviewModal;
+    window.showPosReceiptPreviewModal = showPosReceiptPreviewModal;
+
     function getInvoicePrefixFromPage() {
         var invoiceValue = '';
         var invoiceInput = document.getElementById('invoice_no');
@@ -218,10 +343,15 @@ $(document).ready(function() {
         if (typeof ensureProformaStatus === 'function') {
             ensureProformaStatus();
         }
+    } else if ($('form#edit_sell_form').length > 0) {
+        pos_form_obj = $('form#edit_sell_form');
     } else {
-        pos_form_obj = $('form#add_pos_sell_form');
+        pos_form_obj = $('form#add_sell_form');
+        if (pos_form_obj.length === 0) {
+            pos_form_obj = $('form#add_pos_sell_form');
+        }
     }
-    if ($('form#edit_pos_sell_form').length > 0 || $('form#add_pos_sell_form').length > 0) {
+    if ($('form#edit_pos_sell_form').length > 0 || $('form#edit_sell_form').length > 0 || $('form#add_pos_sell_form').length > 0 || $('form#add_sell_form').length > 0) {
         initialize_printer();
     }
     ensureOrderTaxForEditInvoice();
@@ -1211,7 +1341,10 @@ $(document).ready(function() {
                 disable_pos_form_actions();
 
                 var data = $(form).serialize();
-                data = data + '&status=final';
+                var urlStatus = new URLSearchParams(window.location.search).get('status');
+                var forcedDraftStatus = ['quotation', 'draft', 'proforma'].indexOf(urlStatus) !== -1 ? urlStatus : null;
+                var submitStatus = forcedDraftStatus || 'final';
+                data = data + '&status=' + encodeURIComponent(submitStatus);
                 var url = $(form).attr('action');
                 var productDebugSnapshot = getPosProductDebugSnapshot();
                 console.log('[POS Submit][final] sending', {
@@ -1220,7 +1353,8 @@ $(document).ready(function() {
                     products_count: $('table#pos_table tbody').find('.product_row').length,
                     total_payable: __read_number($('input#final_total_input')),
                     total_paying: __read_number($('input#total_paying_input')),
-                    status_input: $('input#status').val(),
+                    status_input: $('input#status').val() || $('select#status').val(),
+                    submit_status: submitStatus,
                     contact_id: $('select#customer_id').val(),
                     products: productDebugSnapshot
                 });
@@ -1231,17 +1365,20 @@ $(document).ready(function() {
                     dataType: 'json',
                     success: function(result) {
                         if (result.success == 1) {
-                            if (result.whatsapp_link) {
-                                window.open(result.whatsapp_link);
-                            }
+                            pos_last_whatsapp_link = result.whatsapp_link || '';
                             $('#modal_payment').modal('hide');
                             toastr.success(result.msg);
+
+                            if (submitStatus == 'quotation') {
+                                window.location.href = window.location.href.split('/sells/create')[0] + '/sells/quotations';
+                                return;
+                            }
 
                             reset_pos_form();
 
                             //Check if enabled or not
                             if (result.receipt.is_enabled) {
-                                pos_print(result.receipt);
+                                pos_print(result.receipt, { whatsapp_link: pos_last_whatsapp_link });
                             }
                         } else {
                             console.error('[POS Submit][final] failed', result);
@@ -2705,7 +2842,14 @@ function round_row_to_iraqi_dinnar(row) {
     }
 }
 
-function pos_print(receipt) {
+function pos_print(receipt, options) {
+    options = options || {};
+    if (Object.prototype.hasOwnProperty.call(options, 'whatsapp_link')) {
+        pos_last_whatsapp_link = options.whatsapp_link || '';
+    } else {
+        pos_last_whatsapp_link = '';
+    }
+
     //If printer type then connect with websocket
     if (receipt.print_type == 'printer') {
         var content = receipt;
@@ -2725,6 +2869,17 @@ function pos_print(receipt) {
         var title = document.title;
         if (typeof receipt.print_title != 'undefined') {
             document.title = receipt.print_title;
+        }
+
+        // POS route: show preview modal first, print only when user clicks "พิมพ์"
+        if (typeof isPosRouteForReceiptPreviewModal === 'function' && isPosRouteForReceiptPreviewModal()) {
+            if (typeof showPosReceiptPreviewModal === 'function') {
+                showPosReceiptPreviewModal(receipt);
+            }
+            setTimeout(function() {
+                document.title = title;
+            }, 1200);
+            return;
         }
 
         //If printer type browser then print content
