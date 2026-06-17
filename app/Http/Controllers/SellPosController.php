@@ -880,18 +880,19 @@ class SellPosController extends Controller
                 'trace_id' => $debugTraceId,
             ];
 
-            if ($this->isPosStoreDebugEnabled() && !empty($mismatchDebugContext)) {
+            if (!empty($mismatchDebugContext)) {
                 $output['debug_context'] = $mismatchDebugContext;
             }
         }
 
-        if (!$is_direct_sale) {
+        if (!$is_direct_sale || $request->ajax() || $request->wantsJson()) {
             return $output;
         } else {
             if ($input['status'] == 'draft') {
                 if (isset($input['is_quotation']) && $input['is_quotation'] == 1) {
                     // Redirect to quotations page for quotations
-                    return redirect('/sells/quotations')
+                    return redirect()
+                        ->action([\App\Http\Controllers\SellController::class, 'getQuotations'])
                         ->with('status', $output);
                 } else {
                     // Redirect to summary-sales for proforma invoices
@@ -900,7 +901,8 @@ class SellPosController extends Controller
                 }
             } elseif ($input['status'] == 'quotation') {
                 // Redirect to quotations page for quotations
-                return redirect('/sells/quotations')
+                return redirect()
+                    ->action([\App\Http\Controllers\SellController::class, 'getQuotations'])
                     ->with('status', $output);
             } elseif ($input['status'] == 'proforma') {
                 // Redirect to summary-sales for proforma invoices (VT2025/xxxx)
@@ -1742,7 +1744,8 @@ class SellPosController extends Controller
             if ($input['status'] == 'draft') {
                 if (isset($input['is_quotation']) && $input['is_quotation'] == 1) {
                     // QUOTE2025/xxxx - Status = Quotation - Invoice scheme = Quotation
-                    return redirect('/sells/quotations')
+                    return redirect()
+                        ->action([\App\Http\Controllers\SellController::class, 'getQuotations'])
                         ->with('status', $output);
                 } else {
                     // Check if this is a proforma (VT2025/xxxx - Status = Proforma - TAX-INVOICE scheme)
@@ -1759,7 +1762,8 @@ class SellPosController extends Controller
                 }
             } else {
                 if (isset($input['is_quotation']) && $input['is_quotation'] == 1) {
-                    return redirect('/sells/quotations')
+                    return redirect()
+                        ->action([\App\Http\Controllers\SellController::class, 'getQuotations'])
                         ->with('status', $output);
                 }
                 if (!empty($transaction->sub_type) && $transaction->sub_type == 'repair') {
@@ -2154,7 +2158,7 @@ class SellPosController extends Controller
                 'quantity' => $product['quantity'] ?? null,
                 'unit_price_inc_tax' => $product['unit_price_inc_tax'] ?? null,
                 'enable_stock' => isset($product['enable_stock']) ? (int) $product['enable_stock'] : null,
-                'lot_no_line_id' => $product['lot_no_line_id'] ?? null,
+                'lot_no_line_id' => !empty($product['lot_no_line_id']) ? (int) $product['lot_no_line_id'] : null,
                 'sub_unit_id' => $product['sub_unit_id'] ?? null,
                 'base_unit_multiplier' => $product['base_unit_multiplier'] ?? null,
                 'transaction_sell_lines_id' => $product['transaction_sell_lines_id'] ?? null,
@@ -2204,27 +2208,38 @@ class SellPosController extends Controller
                 return [
                     'product_id' => $row['product_id'] ?? null,
                     'variation_id' => $row['variation_id'] ?? null,
+                    'lot_no_line_id' => $row['lot_no_line_id'] ?? null,
                 ];
             })
             ->filter(function ($row) {
                 return !empty($row['product_id']) && !empty($row['variation_id']);
             })
             ->unique(function ($row) {
-                return $row['product_id'] . '_' . $row['variation_id'];
+                return $row['product_id'] . '_' . $row['variation_id'] . '_' . ($row['lot_no_line_id'] ?? 0);
             })
             ->values()
             ->all();
 
         foreach ($requestedPairs as $pair) {
+            $requestedLotNoLineId = !empty($pair['lot_no_line_id']) ? (int) $pair['lot_no_line_id'] : null;
             $availableLines = $this->transactionUtil->getAvailablePurchaseLinesForDebug(
                 $businessId,
                 $effectiveLocationId,
                 (int) $pair['product_id'],
                 (int) $pair['variation_id']
             );
+
+            if (!empty($requestedLotNoLineId)) {
+                $availableLines = collect($availableLines)
+                    ->filter(fn($line) => (int) ($line['purchase_line_id'] ?? 0) === $requestedLotNoLineId)
+                    ->values()
+                    ->all();
+            }
+
             $output['available_stock_snapshot'][] = [
                 'product_id' => (int) $pair['product_id'],
                 'variation_id' => (int) $pair['variation_id'],
+                'requested_lot_no_line_id' => $requestedLotNoLineId,
                 'purchase_lines' => $availableLines,
             ];
         }
