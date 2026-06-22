@@ -21,6 +21,7 @@ use App\VariationLocationDetails;
 use App\VariationTemplate;
 use App\VariationValueTemplate;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ProductUtil extends Util
 {
@@ -1634,7 +1635,20 @@ class ProductUtil extends Util
         }
 
         if (in_array('lot', $search_fields)) {
-            $query->leftjoin('purchase_lines as pl', 'variations.id', '=', 'pl.variation_id');
+            $query->leftjoin('purchase_lines as pl', function ($join) use ($location_id) {
+                $join->on('variations.id', '=', 'pl.variation_id')
+                    ->whereIn('pl.transaction_id', function ($sub_query) use ($location_id) {
+                        $sub_query
+                            ->from('transactions as t')
+                            ->select('t.id')
+                            ->where('t.status', 'received')
+                            ->whereIn('t.type', ['purchase', 'purchase_transfer', 'opening_stock', 'production_purchase']);
+
+                        if (! empty($location_id)) {
+                            $sub_query->where('t.location_id', $location_id);
+                        }
+                    });
+            });
         }
 
         //Include search
@@ -1642,9 +1656,14 @@ class ProductUtil extends Util
 
             //Search with like condition
             if ($search_type == 'like') {
-                $query->where(function ($query) use ($search_term, $search_fields) {
+                $hasFactoryNameColumn = Schema::hasColumn('products', 'factory_name');
+                $query->where(function ($query) use ($search_term, $search_fields, $hasFactoryNameColumn) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', 'like', '%'.$search_term.'%');
+                        $query->orWhere('products.second_name', 'like', '%'.$search_term.'%');
+                        if ($hasFactoryNameColumn) {
+                            $query->orWhere('products.factory_name', 'like', '%'.$search_term.'%');
+                        }
                     }
 
                     if (in_array('sku', $search_fields)) {
@@ -1676,9 +1695,14 @@ class ProductUtil extends Util
 
             //Search with exact condition
             if ($search_type == 'exact') {
-                $query->where(function ($query) use ($search_term, $search_fields) {
+                $hasFactoryNameColumn = Schema::hasColumn('products', 'factory_name');
+                $query->where(function ($query) use ($search_term, $search_fields, $hasFactoryNameColumn) {
                     if (in_array('name', $search_fields)) {
                         $query->where('products.name', $search_term);
+                        $query->orWhere('products.second_name', $search_term);
+                        if ($hasFactoryNameColumn) {
+                            $query->orWhere('products.factory_name', $search_term);
+                        }
                     }
 
                     if (in_array('sku', $search_fields)) {

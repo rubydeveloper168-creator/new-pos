@@ -216,6 +216,16 @@ class BidirectionalSyncService
             $log('new_pos_product_id column already exists in sma_products', 'info');
         }
 
+        if (!in_array('factory_name', $oldProductsColumns, true)) {
+            $afterColumn = in_array('second_name', $oldProductsColumns, true) ? 'second_name' : 'name';
+            DB::connection('old_pos')->statement(
+                "ALTER TABLE sma_products ADD COLUMN factory_name VARCHAR(255) NULL DEFAULT NULL AFTER {$afterColumn}"
+            );
+            $log('Added factory_name column to sma_products', 'success');
+        } else {
+            $log('factory_name column already exists in sma_products', 'info');
+        }
+
         // Check and add columns to new products table (reverse product sync tracking)
         $newProductsColumns = $this->getNewTableColumns('products');
         if (!in_array('synced_to_old_pos', $newProductsColumns, true)) {
@@ -243,6 +253,17 @@ class BidirectionalSyncService
             $log('Added old_pos_product_id column to products', 'success');
         } else {
             $log('old_pos_product_id column already exists in products', 'info');
+        }
+
+        if (!in_array('factory_name', $newProductsColumns, true)) {
+            $afterColumn = in_array('second_name', $newProductsColumns, true) ? 'second_name' : 'name';
+            DB::statement(
+                "ALTER TABLE products ADD COLUMN factory_name VARCHAR(255) NULL DEFAULT NULL AFTER {$afterColumn}"
+            );
+            $this->newProductColumns = null;
+            $log('Added factory_name column to products', 'success');
+        } else {
+            $log('factory_name column already exists in products', 'info');
         }
 
         // Mark all EXISTING sma_sales as synced (they were migrated previously)
@@ -427,9 +448,9 @@ class BidirectionalSyncService
     {
         return $this->oldTableHasColumns('sma_sales', ['synced_to_new_pos', 'sync_source', 'new_pos_transaction_id'])
             && $this->oldTableHasColumns('sma_quotes', ['synced_to_new_pos', 'sync_source', 'new_pos_transaction_id'])
-            && $this->oldTableHasColumns('sma_products', ['synced_to_new_pos', 'sync_source', 'new_pos_product_id'])
+            && $this->oldTableHasColumns('sma_products', ['synced_to_new_pos', 'sync_source', 'new_pos_product_id', 'factory_name'])
             && $this->newTableHasColumns('transactions', ['synced_to_old_pos', 'sync_source', 'old_pos_sale_id'])
-            && $this->newTableHasColumns('products', ['synced_to_old_pos', 'sync_source', 'old_pos_product_id']);
+            && $this->newTableHasColumns('products', ['synced_to_old_pos', 'sync_source', 'old_pos_product_id', 'factory_name']);
     }
 
     public function getPendingQuotationsOldToNew(): int
@@ -1999,11 +2020,11 @@ class BidirectionalSyncService
 
     public function syncOldProductsToNew(callable $log, int $limit = 200): array
     {
-        if (!$this->oldTableHasColumns('sma_products', ['synced_to_new_pos', 'sync_source', 'new_pos_product_id'])) {
+        if (!$this->oldTableHasColumns('sma_products', ['synced_to_new_pos', 'sync_source', 'new_pos_product_id', 'factory_name'])) {
             $log('[OLD→NEW:PRODUCT] Sync columns missing on sma_products. Running setup...', 'warning');
             $this->runSetup($log);
         }
-        if (!$this->newTableHasColumns('products', ['synced_to_old_pos', 'sync_source', 'old_pos_product_id'])) {
+        if (!$this->newTableHasColumns('products', ['synced_to_old_pos', 'sync_source', 'old_pos_product_id', 'factory_name'])) {
             $log('[OLD→NEW:PRODUCT] Sync columns missing on products. Running setup...', 'warning');
             $this->runSetup($log);
         }
@@ -2059,6 +2080,7 @@ class BidirectionalSyncService
                 $newCategoryId = $this->mapOldCategoryToNew($oldProduct->category_id ?? null);
                 $oldName = trim((string) ($oldProduct->name ?? '')) ?: $sku;
                 $oldSecondName = property_exists($oldProduct, 'second_name') ? $oldProduct->second_name : null;
+                $oldFactoryName = property_exists($oldProduct, 'factory_name') ? $oldProduct->factory_name : null;
                 $oldCost = (float) ($oldProduct->cost ?? 0);
                 $oldPrice = (float) ($oldProduct->price ?? 0);
                 $oldAlertQty = (float) ($oldProduct->alert_quantity ?? 0);
@@ -2090,6 +2112,9 @@ class BidirectionalSyncService
 
                     if ($this->hasNewProductColumn('second_name')) {
                         $productInsert['second_name'] = $oldSecondName;
+                    }
+                    if ($this->hasNewProductColumn('factory_name')) {
+                        $productInsert['factory_name'] = $oldFactoryName;
                     }
 
                     $newProductId = DB::table('products')->insertGetId($productInsert);
@@ -2136,6 +2161,9 @@ class BidirectionalSyncService
                     }
                     if ($this->hasNewProductColumn('second_name')) {
                         $productUpdate['second_name'] = $oldSecondName;
+                    }
+                    if ($this->hasNewProductColumn('factory_name')) {
+                        $productUpdate['factory_name'] = $oldFactoryName;
                     }
 
                     DB::table('products')->where('id', $newProductId)->update($productUpdate);
@@ -2188,11 +2216,11 @@ class BidirectionalSyncService
 
     public function syncNewProductsToOld(callable $log, int $limit = 200): array
     {
-        if (!$this->newTableHasColumns('products', ['synced_to_old_pos', 'sync_source', 'old_pos_product_id'])) {
+        if (!$this->newTableHasColumns('products', ['synced_to_old_pos', 'sync_source', 'old_pos_product_id', 'factory_name'])) {
             $log('[NEW→OLD:PRODUCT] Sync columns missing on products. Running setup...', 'warning');
             $this->runSetup($log);
         }
-        if (!$this->oldTableHasColumns('sma_products', ['synced_to_new_pos', 'sync_source', 'new_pos_product_id'])) {
+        if (!$this->oldTableHasColumns('sma_products', ['synced_to_new_pos', 'sync_source', 'new_pos_product_id', 'factory_name'])) {
             $log('[NEW→OLD:PRODUCT] Sync columns missing on sma_products. Running setup...', 'warning');
             $this->runSetup($log);
         }
@@ -2220,6 +2248,7 @@ class BidirectionalSyncService
 
         $oldProductColumns = $this->getOldTableColumns('sma_products');
         $hasOldSecondName = in_array('second_name', $oldProductColumns, true);
+        $hasOldFactoryName = in_array('factory_name', $oldProductColumns, true);
 
         foreach ($pendingProducts as $newProduct) {
             try {
@@ -2252,6 +2281,7 @@ class BidirectionalSyncService
                 $price = (float) ($variation->default_sell_price ?? ($variation->sell_price_inc_tax ?? 0));
                 $mappedOldCategoryId = $this->mapNewCategoryToOld($newProduct->category_id ?? null);
                 $secondName = property_exists($newProduct, 'second_name') ? $newProduct->second_name : null;
+                $factoryName = property_exists($newProduct, 'factory_name') ? $newProduct->factory_name : null;
                 $name = trim((string) ($newProduct->name ?? '')) ?: $sku;
 
                 if ($oldProduct) {
@@ -2273,6 +2303,9 @@ class BidirectionalSyncService
                     }
                     if ($hasOldSecondName) {
                         $oldUpdate['second_name'] = $secondName;
+                    }
+                    if ($hasOldFactoryName) {
+                        $oldUpdate['factory_name'] = $factoryName;
                     }
 
                     DB::connection('old_pos')->table('sma_products')
@@ -2301,6 +2334,9 @@ class BidirectionalSyncService
                     ];
                     if ($hasOldSecondName) {
                         $oldInsert['second_name'] = $secondName;
+                    }
+                    if ($hasOldFactoryName) {
+                        $oldInsert['factory_name'] = $factoryName;
                     }
 
                     $oldProductId = DB::connection('old_pos')->table('sma_products')->insertGetId($oldInsert);

@@ -50,6 +50,14 @@
 
             <div class="col-sm-4">
               <div class="form-group">
+                {!! Form::label('factory_name', 'Factory Name' . ':') !!}
+                {!! Form::text('factory_name', $product->factory_name ?? null, ['class' => 'form-control',
+                'placeholder' => 'Factory Name']); !!}
+              </div>
+            </div>
+
+            <div class="col-sm-4">
+              <div class="form-group">
                 {!! Form::label('sku', __('product.sku')  . ':*') !!} @show_tooltip(__('tooltip.sku'))
                 {!! Form::text('sku', $product->sku, ['class' => 'form-control',
                 'placeholder' => __('product.sku'), 'required']); !!}

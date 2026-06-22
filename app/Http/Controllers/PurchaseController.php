@@ -20,6 +20,7 @@ use App\Variation;
 use Excel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Activitylog\Models\Activity;
 use Yajra\DataTables\Facades\DataTables;
 use App\Events\PurchaseCreatedOrModified;
@@ -948,7 +949,12 @@ class PurchaseController extends Controller
                 'variations.product_id'
             )
                 ->where(function ($query) use ($term) {
+                    $hasFactoryNameColumn = Schema::hasColumn('products', 'factory_name');
                     $query->where('products.name', 'like', '%'.$term.'%');
+                    $query->orWhere('products.second_name', 'like', '%'.$term.'%');
+                    if ($hasFactoryNameColumn) {
+                        $query->orWhere('products.factory_name', 'like', '%'.$term.'%');
+                    }
                     $query->orWhere('sku', 'like', '%'.$term.'%');
                     $query->orWhere('sub_sku', 'like', '%'.$term.'%');
                 })

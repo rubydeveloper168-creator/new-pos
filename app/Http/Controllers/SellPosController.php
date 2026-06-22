@@ -58,6 +58,7 @@ use App\Warranty;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Razorpay\Api\Api;
@@ -2436,7 +2437,12 @@ class SellPosController extends Controller
             //Include search
             if (!empty($term)) {
                 $products->where(function ($query) use ($term) {
+                    $hasFactoryNameColumn = Schema::hasColumn('products', 'factory_name');
                     $query->where('p.name', 'like', '%' . $term . '%');
+                    $query->orWhere('p.second_name', 'like', '%' . $term . '%');
+                    if ($hasFactoryNameColumn) {
+                        $query->orWhere('p.factory_name', 'like', '%' . $term . '%');
+                    }
                     $query->orWhere('sku', 'like', '%' . $term . '%');
                     $query->orWhere('sub_sku', 'like', '%' . $term . '%');
                 });

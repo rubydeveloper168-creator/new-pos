@@ -24,6 +24,7 @@ use App\Warranty;
 use Excel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Yajra\DataTables\Facades\DataTables;
 use App\Events\ProductsCreatedOrModified;
@@ -554,6 +555,9 @@ class ProductController extends Controller
         try {
             $business_id = $request->session()->get('user.business_id');
             $form_fields = ['name', 'second_name', 'brand_id', 'unit_id', 'category_id', 'tax', 'type', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'category_l1_id', 'category_l2_id', 'category_l3_id', 'category_l4_id', 'category_l5_id', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20',];
+            if (Schema::hasColumn('products', 'factory_name')) {
+                $form_fields[] = 'factory_name';
+            }
 
             $module_form_fields = $this->moduleUtil->getModuleFormField('product_form_fields');
             if (! empty($module_form_fields)) {
@@ -632,6 +636,7 @@ class ProductController extends Controller
                 'sku' => $product->sku,
                 'name' => $product->name,
                 'second_name' => $product->second_name ?? null,
+                'factory_name' => $product->factory_name ?? null,
                 'category_id' => $product->category_id,
                 'category_l1_id' => $product->category_l1_id ?? null,
                 'category_l2_id' => $product->category_l2_id ?? null,
@@ -848,6 +853,7 @@ class ProductController extends Controller
             'sku' => $product->sku,
             'name' => $product->name,
             'second_name' => $product->second_name ?? null,
+            'factory_name' => $product->factory_name ?? null,
             'combo_variations_raw' => $variation_snapshot && $variation_snapshot->variations->count() > 0
                 ? $variation_snapshot->variations->first()->combo_variations
                 : null,
@@ -933,7 +939,12 @@ class ProductController extends Controller
 
         try {
             $business_id = $request->session()->get('user.business_id');
-            $product_details = $request->only(['name', 'second_name', 'brand_id', 'unit_id', 'category_id', 'tax', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20', 'category_l1_id', 'category_l2_id', 'category_l3_id', 'category_l4_id', 'category_l5_id', 'type']);
+            $product_fields = ['name', 'second_name', 'brand_id', 'unit_id', 'category_id', 'tax', 'barcode_type', 'sku', 'alert_quantity', 'tax_type', 'weight', 'product_description', 'sub_unit_ids', 'preparation_time_in_minutes', 'product_custom_field1', 'product_custom_field2', 'product_custom_field3', 'product_custom_field4', 'product_custom_field5', 'product_custom_field6', 'product_custom_field7', 'product_custom_field8', 'product_custom_field9', 'product_custom_field10', 'product_custom_field11', 'product_custom_field12', 'product_custom_field13', 'product_custom_field14', 'product_custom_field15', 'product_custom_field16', 'product_custom_field17', 'product_custom_field18', 'product_custom_field19', 'product_custom_field20', 'category_l1_id', 'category_l2_id', 'category_l3_id', 'category_l4_id', 'category_l5_id', 'type'];
+            $hasFactoryNameColumn = Schema::hasColumn('products', 'factory_name');
+            if ($hasFactoryNameColumn) {
+                $product_fields[] = 'factory_name';
+            }
+            $product_details = $request->only($product_fields);
 
             \Log::info('Product update - Raw request data:', [
                 'product_id' => $id,
@@ -982,6 +993,9 @@ class ProductController extends Controller
 
             $product->name = $product_details['name'];
             $product->second_name = $product_details['second_name'] ?? null;
+            if ($hasFactoryNameColumn) {
+                $product->factory_name = $product_details['factory_name'] ?? null;
+            }
             if (!empty($product_details['type'])) {
                 $product->type = $product_details['type'];
             }
@@ -1043,6 +1057,7 @@ class ProductController extends Controller
                 'type' => $request->input('type'),
                 'sku' => $product_details['sku'] ?? null,
                 'second_name' => $product_details['second_name'] ?? null,
+                'factory_name' => $product_details['factory_name'] ?? null,
                 'combo_variation_ids' => $request->input('composition_variation_id', []),
                 'combo_quantities' => $request->input('quantity', []),
                 'combo_units' => $request->input('unit', []),
@@ -1740,8 +1755,13 @@ class ProductController extends Controller
 
             //Include search
             if (! empty($term)) {
-                $products->where(function ($query) use ($term) {
+                $hasFactoryNameColumn = Schema::hasColumn('products', 'factory_name');
+                $products->where(function ($query) use ($term, $hasFactoryNameColumn) {
                     $query->where('products.name', 'like', '%'.$term.'%');
+                    $query->orWhere('products.second_name', 'like', '%'.$term.'%');
+                    if ($hasFactoryNameColumn) {
+                        $query->orWhere('products.factory_name', 'like', '%'.$term.'%');
+                    }
                     $query->orWhere('sku', 'like', '%'.$term.'%');
                     $query->orWhere('sub_sku', 'like', '%'.$term.'%');
                 });

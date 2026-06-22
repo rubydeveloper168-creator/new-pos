@@ -12,6 +12,8 @@
 						{{$product->sku }}<br>
 						<b>Second Name:</b>
 						{{ !empty($product->second_name) ? $product->second_name : '--' }}<br>
+						<b>Factory Name:</b>
+						{{ !empty($product->factory_name) ? $product->factory_name : '--' }}<br>
 						<b>@lang('product.brand'): </b>
 						{{$product->brand->name ?? '--' }}<br>
 						<b>@lang('product.unit'): </b>
